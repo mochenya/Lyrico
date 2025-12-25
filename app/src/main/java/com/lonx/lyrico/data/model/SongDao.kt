@@ -1,0 +1,106 @@
+package com.lonx.lyrico.data.model
+
+import androidx.paging.PagingSource
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.RawQuery
+import androidx.room.Update
+import androidx.sqlite.db.SupportSQLiteQuery
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface SongDao {
+    
+    /**
+     * 插入或更新单个歌曲
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(song: SongEntity)
+    
+    /**
+     * 批量插入或更新歌曲
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(songs: List<SongEntity>)
+    
+    /**
+     * 更新歌曲信息
+     */
+    @Update
+    suspend fun update(song: SongEntity)
+    
+    /**
+     * 删除单个歌曲
+     */
+    @Delete
+    suspend fun delete(song: SongEntity)
+    
+    /**
+     * 按文件路径删除歌曲
+     */
+    @Query("DELETE FROM songs WHERE filePath = :filePath")
+    suspend fun deleteByFilePath(filePath: String)
+    
+    /**
+     * 按文件路径获取歌曲
+     */
+    @Query("SELECT * FROM songs WHERE filePath = :filePath LIMIT 1")
+    suspend fun getSongByPath(filePath: String): SongEntity?
+    
+    /**
+     * 按文件路径获取歌曲（Flow）
+     */
+    @Query("SELECT * FROM songs WHERE filePath = :filePath LIMIT 1")
+    fun getSongByPathFlow(filePath: String): Flow<SongEntity?>
+
+    /**
+     * 获取所有歌曲（PagingSource, a dynamic query for sorting)
+     */
+    @RawQuery(observedEntities = [SongEntity::class])
+    fun getSongsPaged(query: SupportSQLiteQuery): PagingSource<Int, SongEntity>
+
+    /**
+     * 按标题搜索歌曲 (a dynamic query for sorting)
+     */
+    @RawQuery(observedEntities = [SongEntity::class])
+    fun searchSongs(query: SupportSQLiteQuery): PagingSource<Int, SongEntity>
+    
+    /**
+     * 获取未读取元数据的歌曲（fileLastModified为0）
+     */
+    @Query("SELECT * FROM songs WHERE fileLastModified = 0 LIMIT :limit")
+    suspend fun getUnscannedSongs(limit: Int): List<SongEntity>
+    
+    /**
+     * 获取在指定时间之后修改过的歌曲
+     */
+    @Query("SELECT * FROM songs WHERE fileLastModified > :timestamp")
+    suspend fun getSongsModifiedAfter(timestamp: Long): List<SongEntity>
+    
+    /**
+     * 检查歌曲是否存在
+     */
+    @Query("SELECT COUNT(*) FROM songs WHERE filePath = :filePath")
+    suspend fun songExists(filePath: String): Int
+    
+    /**
+     * 获取所有歌曲数量
+     */
+    @Query("SELECT COUNT(*) FROM songs")
+    suspend fun getSongsCount(): Int
+    
+    /**
+     * 清空所有歌曲
+     */
+    @Query("DELETE FROM songs")
+    suspend fun clear()
+    
+    /**
+     * 删除不在指定列表中的歌曲（用于清理已删除的文件）
+     */
+    @Query("DELETE FROM songs WHERE filePath NOT IN (:filepaths)")
+    suspend fun deleteNotIn(filepaths: List<String>)
+}
