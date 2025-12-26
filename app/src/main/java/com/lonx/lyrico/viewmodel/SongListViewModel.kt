@@ -8,6 +8,8 @@ import com.lonx.audiotag.model.AudioTagData
 import com.lonx.lyrico.data.model.SongEntity
 import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.utils.MusicScanner
+import java.text.Collator
+import java.util.Comparator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,17 +69,29 @@ class SongListViewModel(
             }
         }
 
+        val collator = Collator.getInstance()
         val sortedList = when (sort.sortBy) {
-            SortBy.TITLE -> filteredList.sortedBy { it.title ?: it.fileName }
-            SortBy.ARTIST -> filteredList.sortedBy { it.artist ?: "未知艺术家" }
-            SortBy.DATE_MODIFIED -> filteredList.sortedByDescending { it.fileLastModified }
+            SortBy.TITLE -> {
+                val comparator = Comparator<SongEntity> { a, b ->
+                    collator.compare(a.title ?: a.fileName, b.title ?: b.fileName)
+                }
+                filteredList.sortedWith(if (sort.order == SortOrder.ASC) comparator else comparator.reversed())
+            }
+            SortBy.ARTIST -> {
+                val comparator = Comparator<SongEntity> { a, b ->
+                    collator.compare(a.artist ?: "未知艺术家", b.artist ?: "未知艺术家")
+                }
+                filteredList.sortedWith(if (sort.order == SortOrder.ASC) comparator else comparator.reversed())
+            }
+            SortBy.DATE_MODIFIED -> {
+                if (sort.order == SortOrder.ASC) {
+                    filteredList.sortedBy { it.fileLastModified }
+                } else {
+                    filteredList.sortedByDescending { it.fileLastModified }
+                }
+            }
         }
-
-        if (sort.order == SortOrder.ASC) {
-            sortedList.reversed()
-        } else {
-            sortedList
-        }
+        sortedList
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
