@@ -80,7 +80,7 @@ fun EditMetadataScreen(
         }
     }
     LaunchedEffect(songFilePath) {
-        viewModel.loadSongInfo(songFilePath)
+        viewModel.readMetadata(songFilePath)
     }
 
 

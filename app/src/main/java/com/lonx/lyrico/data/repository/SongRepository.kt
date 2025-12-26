@@ -1,7 +1,9 @@
 package com.lonx.lyrico.data.repository
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
 import com.lonx.audiotag.model.AudioTagData
 import com.lonx.audiotag.rw.AudioTagReader
@@ -119,7 +121,7 @@ class SongRepository(
         return@withContext results
     }
 
-    suspend fun updateSongMetadata(audioTagData: AudioTagData, filePath: String): Boolean =
+    suspend fun updateSongMetadata(audioTagData: AudioTagData, filePath: String, lastModified: Long): Boolean =
         withContext(Dispatchers.IO) {
             try {
                 val existingSong = songDao.getSongByPath(filePath)
@@ -133,6 +135,7 @@ class SongRepository(
                     date = audioTagData.date ?: existingSong.date,
                     lyrics = audioTagData.lyrics ?: existingSong.lyrics,
                     rawProperties = audioTagData.rawProperties.toString(),
+                    fileLastModified = lastModified,
                     dbUpdateTime = System.currentTimeMillis()
                 )
 
@@ -144,6 +147,64 @@ class SongRepository(
                 return@withContext false
             }
         }
+
+    private fun isUriPath(path: String): Boolean {
+        return try {
+            val uri = path.toUri()
+            uri.scheme != null && (uri.scheme == "content" || uri.scheme == "file")
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    suspend fun writeAudioTagData(filePath: String, audioTagData: AudioTagData): Boolean {
+        return try {
+            (if (isUriPath(filePath)) {
+                context.contentResolver.openFileDescriptor(filePath.toUri(), "rw")
+            } else {
+                android.os.ParcelFileDescriptor.open(File(filePath), android.os.ParcelFileDescriptor.MODE_READ_WRITE)
+            })?.use { pfdDescriptor ->
+                val updates = mutableMapOf<String, String>()
+                audioTagData.title?.let { updates["TITLE"] = it }
+                audioTagData.artist?.let { updates["ARTIST"] = it }
+                audioTagData.album?.let { updates["ALBUM"] = it }
+                audioTagData.genre?.let { updates["GENRE"] = it }
+                audioTagData.date?.let { updates["DATE"] = it }
+
+                com.lonx.audiotag.rw.AudioTagWriter.writeTags(pfdDescriptor, updates)
+
+                audioTagData.lyrics?.let { lyricsString ->
+                    com.lonx.audiotag.rw.AudioTagWriter.writeLyrics(pfdDescriptor, lyricsString)
+                }
+
+                true
+            } ?: false
+        } catch (e: android.app.RecoverableSecurityException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "写入文件失败", e)
+            false
+        }
+    }
+
+    suspend fun readAudioTagData(filePath: String): AudioTagData {
+        return withContext(Dispatchers.IO) {
+            try {
+                (if (isUriPath(filePath)) {
+                    context.contentResolver.openFileDescriptor(filePath.toUri(), "r")
+                } else {
+                    android.os.ParcelFileDescriptor.open(File(filePath), android.os.ParcelFileDescriptor.MODE_READ_ONLY)
+                })?.use { descriptor ->
+                    AudioTagReader.read(descriptor, true)
+                } ?: AudioTagData()
+            } catch (e: Exception) {
+                Log.e(TAG, "读取音频元数据失败: $filePath", e)
+                AudioTagData()
+            }
+        }
+    }
+
 
     suspend fun deleteSong(filePath: String) = withContext(Dispatchers.IO) {
         try {
