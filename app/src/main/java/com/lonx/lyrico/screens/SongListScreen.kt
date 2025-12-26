@@ -238,7 +238,7 @@ fun SongListItem(
             ) {
                 // 第一行: 标题
                 Text(
-                    text = song.title ?: song.fileName,
+                    text = song.title.takeIf { !it.isNullOrBlank() } ?: song.fileName,
                     fontWeight = FontWeight.Medium, // 稍微降低字重以显得清秀
                     fontSize = 15.sp,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -250,7 +250,7 @@ fun SongListItem(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // 歌手
                     Text(
-                        text = song.artist ?: "未知艺术家",
+                        text = song.artist.takeIf { !it.isNullOrBlank() } ?: "未知艺术家",
                         color = MaterialTheme.colorScheme.onSurfaceVariant, // 使用更标准的次级文字颜色
                         fontSize = 13.sp,
                         maxLines = 1,

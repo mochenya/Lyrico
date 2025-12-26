@@ -181,6 +181,7 @@ fun EditMetadataScreen(
                     value = editingTagData?.title ?: "",
                     onValueChange = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(title = it)) },
                     isModified = editingTagData?.title != originalTagData?.title,
+                    onRevert = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(title = originalTagData?.title ?: "")) },
                     icon = Icons.Default.Title
                 )
 
@@ -189,6 +190,7 @@ fun EditMetadataScreen(
                     value = editingTagData?.artist ?: "",
                     onValueChange = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(artist = it)) },
                     isModified = editingTagData?.artist != originalTagData?.artist,
+                    onRevert = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(artist = originalTagData?.artist ?: "")) },
                     icon = Icons.Default.Person
                 )
 
@@ -197,6 +199,7 @@ fun EditMetadataScreen(
                     value = editingTagData?.album ?: "",
                     onValueChange = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(album = it)) },
                     isModified = editingTagData?.album != originalTagData?.album,
+                    onRevert = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(album = originalTagData?.album ?: "")) },
                     icon = Icons.Default.Album
                 )
 
@@ -205,6 +208,7 @@ fun EditMetadataScreen(
                     value = editingTagData?.date ?: "",
                     onValueChange = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(date = it)) },
                     isModified = editingTagData?.date != originalTagData?.date,
+                    onRevert = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(date = originalTagData?.date ?: "")) },
                     icon = Icons.Default.CalendarToday
                 )
 
@@ -213,6 +217,7 @@ fun EditMetadataScreen(
                     value = editingTagData?.genre ?: "",
                     onValueChange = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(genre = it)) },
                     isModified = editingTagData?.genre != originalTagData?.genre,
+                    onRevert = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(genre = originalTagData?.genre ?: "")) },
                     icon = Icons.Default.Category
                 )
 
@@ -225,6 +230,7 @@ fun EditMetadataScreen(
                         )
                     },
                     isModified = editingTagData?.channels != originalTagData?.channels,
+                    onRevert = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(channels = originalTagData?.channels ?: 0)) },
                     icon = Icons.AutoMirrored.Filled.QueueMusic
                 )
 
@@ -233,6 +239,7 @@ fun EditMetadataScreen(
                     value = editingTagData?.lyrics ?: "",
                     onValueChange = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(lyrics = it)) },
                     isModified = editingTagData?.lyrics != originalTagData?.lyrics,
+                    onRevert = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(lyrics = originalTagData?.lyrics ?: "")) },
                     isMultiline = true,
                     icon = Icons.AutoMirrored.Filled.List
                 )
@@ -250,6 +257,7 @@ private fun MetadataInputGroup(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     isModified: Boolean = false,
+    onRevert: () -> Unit,
     isMultiline: Boolean = false,
     icon: ImageVector? = null,
     actionButtons: @Composable RowScope.() -> Unit = {}
@@ -278,12 +286,20 @@ private fun MetadataInputGroup(
                 Box(
                     modifier = Modifier
                         .background(Amber100, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
                 ){
                     Text(
                         text = "已修改",
                         color = Amber600,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
+                    )
+                }
+                IconButton(onClick = onRevert, modifier = Modifier.size(24.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Undo,
+                        contentDescription = "撤销修改",
+                        tint = Gray400
                     )
                 }
             }
