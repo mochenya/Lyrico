@@ -3,19 +3,15 @@ package com.lonx.lyrico.data.repository
 import android.content.Context
 import android.util.Log
 import androidx.core.net.toUri
-import androidx.paging.Pager
-import androidx.paging.PagingConfig
-import androidx.paging.PagingData
-import androidx.sqlite.db.SimpleSQLiteQuery
 import com.lonx.audiotag.model.AudioTagData
 import com.lonx.audiotag.rw.AudioTagReader
 import com.lonx.lyrico.data.LyricoDatabase
 import com.lonx.lyrico.data.model.SongEntity
 import com.lonx.lyrico.data.model.SongFile
-import com.lonx.lyrico.viewmodel.SortInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * 歌曲数据存储库 - 处理数据库和文件系统交互
@@ -27,37 +23,14 @@ class SongRepository(
     private val songDao = database.songDao()
     private companion object {
         const val TAG = "SongRepository"
+        const val COVER_CACHE_DIR = "covers"
     }
 
     /**
-     * Get all songs (paginated and sorted)
+     * Get all songs as a flow.
      */
-    fun getSongs(sortInfo: SortInfo): Flow<PagingData<SongEntity>> {
-        val query = SimpleSQLiteQuery("SELECT * FROM songs ORDER BY ${sortInfo.sortBy.dbColumn} ${sortInfo.order.name}")
-        return Pager(
-            config = PagingConfig(pageSize = 30, enablePlaceholders = false),
-            pagingSourceFactory = { songDao.getSongsPaged(query) }
-        ).flow
-    }
-
-    /**
-     * Search songs (paginated and sorted)
-     */
-    fun searchSongs(query: String, sortInfo: SortInfo): Flow<PagingData<SongEntity>> {
-        val statement = SimpleSQLiteQuery(
-            """
-                SELECT * FROM songs 
-                WHERE title LIKE '%' || ? || '%' 
-                   OR artist LIKE '%' || ? || '%'
-                   OR album LIKE '%' || ? || '%'
-                ORDER BY ${sortInfo.sortBy.dbColumn} ${sortInfo.order.name}
-            """,
-            arrayOf(query, query, query)
-        )
-        return Pager(
-            config = PagingConfig(pageSize = 30, enablePlaceholders = false),
-            pagingSourceFactory = { songDao.searchSongs(statement) }
-        ).flow
+    fun getAllSongs(): Flow<List<SongEntity>> {
+        return songDao.getAllSongs()
     }
 
     /**
@@ -80,32 +53,29 @@ class SongRepository(
         forceUpdate: Boolean = false
     ): SongEntity? = withContext(Dispatchers.IO) {
         try {
-            // 检查文件最后修改时间
             val fileLastModified = getFileLastModified(songFile.filePath)
-            
-            // 如果不是强制更新，检查数据库中的版本
+
             if (!forceUpdate) {
                 val existingSong = songDao.getSongByPath(songFile.filePath)
                 if (existingSong != null && existingSong.fileLastModified == fileLastModified) {
-                    Log.d(TAG, "歌曲未修改，跳过重新扫描: ${songFile.fileName}")
                     return@withContext existingSong
                 }
+                // If song exists, we might need to delete old cover before saving new one
+                deleteCoverFile(existingSong?.coverPath)
             }
 
             Log.d(TAG, "读取歌曲元数据: ${songFile.fileName}")
             
-            // 从文件读取元数据
             val audioData = context.contentResolver.openFileDescriptor(
-                songFile.filePath.toUri(),
-                "r"
+                songFile.filePath.toUri(), "r"
             )?.use { pfd ->
                 AudioTagReader.read(pfd, readPictures = true)
             } ?: return@withContext null
 
-            // 获取封面图片
-            val coverData = audioData.pictures.firstOrNull()?.data
+            val coverPath = audioData.pictures.firstOrNull()?.data?.let {
+                saveCoverToFile(it, songFile.filePath)
+            }
 
-            // 创建数据库实体
             val songEntity = SongEntity(
                 filePath = songFile.filePath,
                 fileName = songFile.fileName,
@@ -120,12 +90,11 @@ class SongRepository(
                 sampleRate = audioData.sampleRate,
                 channels = audioData.channels,
                 rawProperties = audioData.rawProperties.toString(),
-                coverData = coverData,
+                coverPath = coverPath,
                 fileLastModified = fileLastModified,
                 dbUpdateTime = System.currentTimeMillis()
             )
 
-            // 保存到数据库
             songDao.insert(songEntity)
             Log.d(TAG, "歌曲元数据已保存: ${songFile.fileName}")
             return@withContext songEntity
@@ -136,9 +105,6 @@ class SongRepository(
         }
     }
 
-    /**
-     * 批量扫描并保存歌曲元数据（增量更新）
-     */
     suspend fun scanAndSaveSongs(
         songFiles: List<SongFile>,
         forceFullScan: Boolean = false
@@ -152,7 +118,6 @@ class SongRepository(
             }
         }
 
-        // 清理已删除的文件
         val existingPaths = songFiles.map { it.filePath }
         if (existingPaths.isNotEmpty()) {
             songDao.deleteNotIn(existingPaths)
@@ -162,14 +127,20 @@ class SongRepository(
         return@withContext results
     }
 
-    /**
-     * 更新歌曲元数据（编辑后直接更新数据库）
-     */
     suspend fun updateSongMetadata(audioTagData: AudioTagData, filePath: String): Boolean =
         withContext(Dispatchers.IO) {
             try {
                 val existingSong = songDao.getSongByPath(filePath)
                     ?: return@withContext false
+
+                val newCoverBytes = audioTagData.pictures.firstOrNull()?.data
+                var newCoverPath = existingSong.coverPath
+
+                if (newCoverBytes != null) {
+                    // Delete old cover and save new one
+                    deleteCoverFile(existingSong.coverPath)
+                    newCoverPath = saveCoverToFile(newCoverBytes, filePath)
+                }
 
                 val updatedSong = existingSong.copy(
                     title = audioTagData.title ?: existingSong.title,
@@ -179,8 +150,7 @@ class SongRepository(
                     date = audioTagData.date ?: existingSong.date,
                     lyrics = audioTagData.lyrics ?: existingSong.lyrics,
                     rawProperties = audioTagData.rawProperties.toString(),
-                    coverData = audioTagData.pictures.firstOrNull()?.data
-                        ?: existingSong.coverData,
+                    coverPath = newCoverPath,
                     dbUpdateTime = System.currentTimeMillis()
                 )
 
@@ -193,11 +163,10 @@ class SongRepository(
             }
         }
 
-    /**
-     * 删除歌曲记录
-     */
     suspend fun deleteSong(filePath: String) = withContext(Dispatchers.IO) {
         try {
+            val song = songDao.getSongByPath(filePath)
+            deleteCoverFile(song?.coverPath)
             songDao.deleteByFilePath(filePath)
             Log.d(TAG, "歌曲已删除: $filePath")
         } catch (e: Exception) {
@@ -205,24 +174,16 @@ class SongRepository(
         }
     }
 
-    /**
-     * 获取歌曲总数
-     */
     suspend fun getSongsCount(): Int = withContext(Dispatchers.IO) {
         songDao.getSongsCount()
     }
 
-    /**
-     * 清空所有歌曲数据
-     */
     suspend fun clearAll() = withContext(Dispatchers.IO) {
+        clearCoverCache()
         songDao.clear()
         Log.d(TAG, "所有歌曲数据已清空")
     }
 
-    /**
-     * 获取文件最后修改时间
-     */
     private fun getFileLastModified(filePath: String): Long {
         return try {
             context.contentResolver.query(
@@ -243,4 +204,41 @@ class SongRepository(
             0L
         }
     }
+    
+    private fun saveCoverToFile(coverData: ByteArray, songFilePath: String): String? {
+        return try {
+            val fileName = "cover_${songFilePath.hashCode()}.jpg"
+            val coverCacheDir = File(context.cacheDir, COVER_CACHE_DIR).apply { mkdirs() }
+            val file = File(coverCacheDir, fileName)
+            file.writeBytes(coverData)
+            file.absolutePath
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save cover to file for $songFilePath", e)
+            null
+        }
+    }
+
+    private fun deleteCoverFile(coverPath: String?) {
+        if (coverPath == null) return
+        try {
+            val file = File(coverPath)
+            if (file.exists()) {
+                file.delete()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to delete cover file: $coverPath", e)
+        }
+    }
+    
+    private fun clearCoverCache() {
+        try {
+            val coverDir = File(context.cacheDir, COVER_CACHE_DIR)
+            if (coverDir.exists()) {
+                coverDir.deleteRecursively()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear cover cache", e)
+        }
+    }
 }
+

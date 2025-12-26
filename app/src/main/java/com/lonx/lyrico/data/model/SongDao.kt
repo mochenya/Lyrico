@@ -57,16 +57,10 @@ interface SongDao {
     fun getSongByPathFlow(filePath: String): Flow<SongEntity?>
 
     /**
-     * 获取所有歌曲（PagingSource, a dynamic query for sorting)
+     * 获取所有歌曲
      */
-    @RawQuery(observedEntities = [SongEntity::class])
-    fun getSongsPaged(query: SupportSQLiteQuery): PagingSource<Int, SongEntity>
-
-    /**
-     * 按标题搜索歌曲 (a dynamic query for sorting)
-     */
-    @RawQuery(observedEntities = [SongEntity::class])
-    fun searchSongs(query: SupportSQLiteQuery): PagingSource<Int, SongEntity>
+    @Query("SELECT * FROM songs")
+    fun getAllSongs(): Flow<List<SongEntity>>
     
     /**
      * 获取未读取元数据的歌曲（fileLastModified为0）

@@ -5,12 +5,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,25 +28,23 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.paging.LoadState
-import androidx.paging.compose.collectAsLazyPagingItems
 import com.lonx.audiotag.model.AudioTagData
 import com.lonx.lyrico.data.model.SongEntity
 import com.lonx.lyrico.ui.theme.Gray200
 import com.lonx.lyrico.ui.theme.Gray400
+import com.lonx.lyrico.utils.BitmapUtils
 import com.lonx.lyrico.viewmodel.SongInfo
 import com.lonx.lyrico.viewmodel.SongListViewModel
 import com.lonx.lyrico.viewmodel.SortBy
 import com.lonx.lyrico.viewmodel.SortInfo
 import com.lonx.lyrico.viewmodel.SortOrder
 import org.koin.androidx.compose.koinViewModel
-import java.util.Locale
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,7 +57,7 @@ fun SongListScreen(
     val uiState by viewModel.uiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val sortInfo by viewModel.sortInfo.collectAsState()
-    val lazySongItems = viewModel.songs.collectAsLazyPagingItems()
+    val songs by viewModel.songs.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
     var showSortMenu by remember { mutableStateOf(false) }
 
@@ -144,7 +141,7 @@ fun SongListScreen(
                 .padding(paddingValues)
         ) {
             // Global loading state for initial scan
-            if (uiState.isLoading && lazySongItems.itemCount == 0) {
+            if (uiState.isLoading && songs.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -155,80 +152,40 @@ fun SongListScreen(
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(
-                    count = lazySongItems.itemCount,
-                    key = { index -> lazySongItems.peek(index)?.filePath ?: index }
-                ) { index ->
-                    val song = lazySongItems[index]
-                    if (song != null) {
-                        SongListItem(
-                            song = song,
-                            onSongClick = {
-                                // Convert SongEntity to SongInfo
-                                val songInfo = SongInfo(
-                                    filePath = song.filePath,
-                                    fileName = song.fileName,
-                                    tagData = song.let { entity ->
-                                        AudioTagData(
-                                            title = entity.title,
-                                            artist = entity.artist,
-                                            album = entity.album,
-                                            genre = entity.genre,
-                                            date = entity.date,
-                                            lyrics = entity.lyrics,
-                                            durationMilliseconds = entity.durationMilliseconds,
-                                            bitrate = entity.bitrate,
-                                            sampleRate = entity.sampleRate,
-                                            channels = entity.channels,
-                                            rawProperties = emptyMap()
-                                        )
-                                    },
-                                    coverBitmap = song.coverData?.let { coverData ->
-                                        android.graphics.BitmapFactory.decodeByteArray(coverData, 0, coverData.size)
-                                    }
-                                )
-                                onSongClick(songInfo)
-                            }
-                        )
-                        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    }
-                }
-
-                // Paging loading states
-                lazySongItems.loadState.apply {
-                    when {
-                        refresh is LoadState.Loading -> {
-                            item {
-                                Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator()
+                    items = songs,
+                    key = { song -> song.filePath }
+                ) { song ->
+                    SongListItem(
+                        song = song,
+                        onSongClick = {
+                            // Convert SongEntity to SongInfo
+                            val songInfo = SongInfo(
+                                filePath = song.filePath,
+                                fileName = song.fileName,
+                                tagData = song.let { entity ->
+                                    AudioTagData(
+                                        title = entity.title,
+                                        artist = entity.artist,
+                                        album = entity.album,
+                                        genre = entity.genre,
+                                        date = entity.date,
+                                        lyrics = entity.lyrics,
+                                        durationMilliseconds = entity.durationMilliseconds,
+                                        bitrate = entity.bitrate,
+                                        sampleRate = entity.sampleRate,
+                                        channels = entity.channels,
+                                        rawProperties = emptyMap()
+                                    )
+                                },
+                                // Also use efficient decoding here for safety, though the next screen might need full quality
+                                coverBitmap = song.coverPath?.let { path ->
+                                    runCatching { BitmapUtils.decodeSampledBitmapFromFile(path, 512, 512) }.getOrNull()
                                 }
-                            }
+                            )
+                            onSongClick(songInfo)
                         }
-                        append is LoadState.Loading -> {
-                            item {
-                                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.Center) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                                }
-                            }
-                        }
-                        refresh is LoadState.Error -> {
-                            val e = lazySongItems.loadState.refresh as LoadState.Error
-                            item {
-                                Text(
-                                    text = "Error: ${e.error.localizedMessage}",
-                                    modifier = Modifier.fillParentMaxSize().padding(16.dp)
-                                )
-                            }
-                        }
-                        append is LoadState.Error -> {
-                            val e = lazySongItems.loadState.append as LoadState.Error
-                            item {
-                                Text(
-                                    text = "Error: ${e.error.localizedMessage}",
-                                    modifier = Modifier.padding(16.dp)
-                                )
-                            }
-                        }
-                    }
+                    )
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
             }
         }
@@ -250,20 +207,24 @@ fun SongListItem(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            // 优化点2: 减少图标与文字的间距
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 优化点3: 封面尺寸缩小至 48dp (原 64dp)
             Box(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
                     .background(Gray200)
             ) {
-                if (song.coverData != null) {
-                    val bitmap = remember(song.coverData) {
-                        android.graphics.BitmapFactory.decodeByteArray(song.coverData, 0, song.coverData.size)
+                val density = LocalDensity.current
+                val imageSizePx = remember(density) { with(density) { 48.dp.toPx().toInt() } }
+
+                val bitmap: android.graphics.Bitmap? = remember(song.coverPath) {
+                    song.coverPath?.let { path ->
+                        BitmapUtils.decodeSampledBitmapFromFile(path, imageSizePx, imageSizePx)
                     }
+                }
+
+                if (bitmap != null) {
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = song.title,
@@ -280,6 +241,7 @@ fun SongListItem(
                             .padding(10.dp) // 调整 Icon padding 以适应小尺寸
                     )
                 }
+                
                 // 格式角标 (保持但字体缩小)
                 Box(
                     modifier = Modifier

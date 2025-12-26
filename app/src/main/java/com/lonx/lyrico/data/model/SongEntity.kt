@@ -18,7 +18,7 @@ import androidx.room.PrimaryKey
  * @param sampleRate 采样率
  * @param channels 声道数
  * @param rawProperties 原始属性JSON字符串
- * @param coverData 封面图片二进制数据
+ * @param coverPath 封面图片缓存路径
  * @param fileLastModified 文件最后修改时间戳
  * @param dbUpdateTime 数据库更新时间
  */
@@ -38,7 +38,7 @@ data class SongEntity(
     val sampleRate: Int = 0,
     val channels: Int = 0,
     val rawProperties: String? = null,
-    val coverData: ByteArray? = null,
+    val coverPath: String? = null,
     val fileLastModified: Long = 0,
     val dbUpdateTime: Long = System.currentTimeMillis()
 ) {
@@ -61,10 +61,7 @@ data class SongEntity(
         if (sampleRate != other.sampleRate) return false
         if (channels != other.channels) return false
         if (rawProperties != other.rawProperties) return false
-        if (coverData != null) {
-            if (other.coverData == null) return false
-            if (!coverData.contentEquals(other.coverData)) return false
-        } else if (other.coverData != null) return false
+        if (coverPath != other.coverPath) return false
         if (fileLastModified != other.fileLastModified) return false
 
         return true
@@ -84,7 +81,7 @@ data class SongEntity(
         result = 31 * result + sampleRate
         result = 31 * result + channels
         result = 31 * result + (rawProperties?.hashCode() ?: 0)
-        result = 31 * result + (coverData?.contentHashCode() ?: 0)
+        result = 31 * result + (coverPath?.hashCode() ?: 0)
         result = 31 * result + fileLastModified.hashCode()
         return result
     }

@@ -2,35 +2,26 @@ package com.lonx.lyrico.viewmodel
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.paging.PagingData
-import androidx.paging.cachedIn
 import com.lonx.audiotag.model.AudioTagData
 import com.lonx.lyrico.data.model.SongEntity
-import com.lonx.lyrico.data.model.SongFile
 import com.lonx.lyrico.data.repository.SongRepository
 import com.lonx.lyrico.utils.BackgroundScanManager
 import com.lonx.lyrico.utils.MusicScanner
-import com.lonx.lyrico.utils.SettingsManager
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Collections
 
 data class SongInfo(
     val filePath: String,
@@ -41,18 +32,15 @@ data class SongInfo(
 
 data class SongListUiState(
     val isLoading: Boolean = false,
-    val lastScanTime: Long = 0,
-    val searchQuery: String = "",
-    val sortInfo: SortInfo = SortInfo()
+    val lastScanTime: Long = 0
 )
 
-@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+@OptIn(FlowPreview::class)
 class SongListViewModel(
     private val musicScanner: MusicScanner,
-    private val settingsManager: SettingsManager,
     private val songRepository: SongRepository,
     private val backgroundScanManager: BackgroundScanManager,
-    private val context: Context
+    @Suppress("unused") private val context: Context
 ) : ViewModel() {
 
     private val TAG = "SongListViewModel"
@@ -65,65 +53,84 @@ class SongListViewModel(
     private val _sortInfo = MutableStateFlow(SortInfo())
     val sortInfo: StateFlow<SortInfo> = _sortInfo.asStateFlow()
 
-    val songs: Flow<PagingData<SongEntity>> = combine(_searchQuery, _sortInfo) { query, sort ->
-        Pair(query, sort)
-    }.debounce(300)
-        .flatMapLatest { (query, sort) ->
-            if (query.isBlank()) {
-                songRepository.getSongs(sort)
-            } else {
-                songRepository.searchSongs(query, sort)
+    private val _allSongs = MutableStateFlow<List<SongEntity>>(emptyList())
+
+    val songs: StateFlow<List<SongEntity>> = combine(
+        _allSongs,
+        _searchQuery.debounce(300),
+        _sortInfo
+    ) { songs, query, sort ->
+        val filteredList = if (query.isBlank()) {
+            songs
+        } else {
+            songs.filter { song ->
+                song.title?.contains(query, ignoreCase = true) == true ||
+                        song.artist?.contains(query, ignoreCase = true) == true ||
+                        song.album?.contains(query, ignoreCase = true) == true ||
+                        song.fileName.contains(query, ignoreCase = true)
             }
-        }.cachedIn(viewModelScope)
+        }
 
-    private val songInfoCache = Collections.synchronizedMap(mutableMapOf<String, StateFlow<SongInfo?>>())
+        val sortedList = when (sort.sortBy) {
+            SortBy.TITLE -> filteredList.sortedBy { it.title ?: it.fileName }
+            SortBy.ARTIST -> filteredList.sortedBy { it.artist ?: "未知艺术家" }
+            SortBy.DATE_MODIFIED -> filteredList.sortedByDescending { it.fileLastModified }
+        }
 
-    private var lastFullScanTime = 0L
-    private val FULL_SCAN_INTERVAL_MS = 60 * 60 * 1000 // 1小时
+        if (sort.order == SortOrder.ASC) {
+            sortedList.reversed()
+        } else {
+            sortedList
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     init {
         Log.d(TAG, "SongListViewModel 初始化")
-
+        // Just collect songs from the database. The UI is responsible for triggering the initial scan.
         viewModelScope.launch {
-            settingsManager.scannedFolders.collect { folders ->
-                Log.d(TAG, "扫描文件夹配置已变更: $folders")
-
-                val currentTime = System.currentTimeMillis()
-                if (lastFullScanTime == 0L || (currentTime - lastFullScanTime) > FULL_SCAN_INTERVAL_MS) {
-                    lastFullScanTime = currentTime
-                    scanMusicFilesInBackground()
-                }
+            songRepository.getAllSongs().collect { songList ->
+                _allSongs.value = songList
             }
         }
     }
 
     fun onSortChange(newSortInfo: SortInfo) {
         _sortInfo.value = newSortInfo
-        _uiState.update { it.copy(sortInfo = newSortInfo) }
     }
 
     fun onSearchQueryChanged(query: String) {
         _searchQuery.value = query
-        _uiState.update { it.copy(searchQuery = query) }
     }
 
-    private fun scanMusicFilesInBackground() {
+    fun initialScanIfEmpty() {
+        viewModelScope.launch {
+            if (songRepository.getSongsCount() == 0) {
+                Log.d(TAG, "数据库为空，触发首次扫描")
+                triggerScan(forceFullScan = true)
+            }
+        }
+    }
+
+    private fun triggerScan(forceFullScan: Boolean = false) {
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                Log.d(TAG, "开始后台扫描文件")
+                Log.d(TAG, "开始后台扫描文件 (forceFullScan=$forceFullScan)")
                 _uiState.update { it.copy(isLoading = true) }
 
-                val scannedFolders = settingsManager.scannedFolders.first()
-                if (scannedFolders.isEmpty()) {
-                    _uiState.update { it.copy(isLoading = false) }
-                    return@launch
+                if (forceFullScan) {
+                    musicScanner.clearCache()
                 }
 
-                val songFiles = musicScanner.scanMusicFiles(scannedFolders.toList())
+                // The parameter to scanMusicFiles is now ignored, but we pass an empty list for compatibility.
+                val songFiles = musicScanner.scanMusicFiles(emptyList())
                 Log.d(TAG, "扫描发现 ${songFiles.size} 个音乐文件")
 
                 withContext(Dispatchers.IO) {
-                    songRepository.scanAndSaveSongs(songFiles, forceFullScan = false)
+                    songRepository.scanAndSaveSongs(songFiles, forceFullScan = forceFullScan)
                 }
 
                 _uiState.update {
@@ -143,48 +150,7 @@ class SongListViewModel(
 
     fun refreshSongs(forceFullScan: Boolean = false) {
         Log.d(TAG, "用户手动刷新歌曲列表 (forceFullScan=$forceFullScan)")
-
-        if (forceFullScan) {
-            musicScanner.clearCache()
-            lastFullScanTime = 0
-        }
-
-        scanMusicFilesInBackground()
-    }
-    
-    fun getSongDetails(songFile: SongFile): Flow<SongInfo?> {
-        return songRepository.getSongFlow(songFile.filePath)
-            .map { songEntity ->
-                if (songEntity == null) {
-                    null
-                } else {
-                    val bitmap = songInfoCache[songFile.filePath]?.value?.coverBitmap
-                        ?: songEntity.coverData?.let {
-                            BitmapFactory.decodeByteArray(it, 0, it.size)
-                        }
-                    
-                    val audioData = AudioTagData(
-                        title = songEntity.title,
-                        artist = songEntity.artist,
-                        album = songEntity.album,
-                        genre = songEntity.genre,
-                        date = songEntity.date,
-                        lyrics = songEntity.lyrics,
-                        durationMilliseconds = songEntity.durationMilliseconds,
-                        bitrate = songEntity.bitrate,
-                        sampleRate = songEntity.sampleRate,
-                        channels = songEntity.channels,
-                        rawProperties = emptyMap()
-                    )
-                    
-                    SongInfo(
-                        filePath = songEntity.filePath,
-                        fileName = songEntity.fileName,
-                        tagData = audioData,
-                        coverBitmap = bitmap
-                    )
-                }
-            }
+        triggerScan(forceFullScan)
     }
 
     fun startBackgroundScan() {

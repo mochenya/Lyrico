@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import com.lonx.lyrico.data.model.SongEntity
 import com.lonx.lyrico.data.model.SongDao
 
-@Database(entities = [SongEntity::class], version = 1, exportSchema = false)
+@Database(entities = [SongEntity::class], version = 2, exportSchema = false)
 abstract class LyricoDatabase : RoomDatabase() {
     abstract fun songDao(): SongDao
 
@@ -21,7 +21,9 @@ abstract class LyricoDatabase : RoomDatabase() {
                     context.applicationContext,
                     LyricoDatabase::class.java,
                     "lyrico_database"
-                ).build().also { INSTANCE = it }
+                )
+                    .fallbackToDestructiveMigration()
+                    .build().also { INSTANCE = it }
             }
         }
 

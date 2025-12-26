@@ -30,7 +30,7 @@ val appModule = module {
     single { SongRepository(get(), androidContext()) }
     
     // ViewModels
-    viewModel { SongListViewModel(get(), get(), get(), get(), androidContext()) }
+    viewModel { SongListViewModel(get(), get(), get(), androidContext()) }
     viewModel { SettingsViewModel(get()) }
     viewModel { SearchViewModel(get(), get()) }
     viewModel { EditMetadataViewModel(get(), get(), get(), androidContext()) }

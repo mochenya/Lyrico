@@ -3,22 +3,25 @@ package com.lonx.lyrico
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
-import com.lonx.lyrico.di.appModule
+import com.hjq.permissions.OnPermissionCallback
+import com.hjq.permissions.XXPermissions
+import com.hjq.permissions.permission.PermissionLists
+import com.hjq.permissions.permission.base.IPermission
 import com.lonx.lyrico.ui.theme.LyricoTheme
+import com.lonx.lyrico.utils.PermissionUtil
 import com.lonx.lyrico.viewmodel.SettingsViewModel
 import org.koin.android.ext.android.inject
-import org.koin.android.ext.koin.androidContext
-import org.koin.android.ext.koin.androidLogger
-import org.koin.core.context.startKoin
-import org.koin.core.logger.Level
 
-class MainActivity : ComponentActivity() {
+open class MainActivity : ComponentActivity() {
 
+    @JvmField
+    protected var hasPermission = false
     private val settingsViewModel: SettingsViewModel by inject()
 
     private lateinit var openDirectoryLauncher: ActivityResultLauncher<Uri?>
@@ -26,12 +29,28 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        startKoin {
-            androidLogger(Level.ERROR) // Log Koin errors
-            androidContext(this@MainActivity)
-            modules(appModule)
-        }
+        hasPermission = PermissionUtil.hasNecessaryPermission(this)
+        if (!hasPermission) {
 
+            XXPermissions.with(this)
+                // 申请多个权限
+                .permission(PermissionLists.getReadMediaAudioPermission())
+
+                .request(object : OnPermissionCallback {
+
+                    override fun onResult(grantedList: MutableList<IPermission>, deniedList: MutableList<IPermission>) {
+                        val allGranted = deniedList.isEmpty()
+                        if (!allGranted) {
+                            // 判断请求失败的权限是否被用户勾选了不再询问的选项
+                            Toast.makeText(this@MainActivity, "已拒绝权限", Toast.LENGTH_SHORT).show()
+                            return
+                        }
+
+                    }
+
+
+                })
+        }
         openDirectoryLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
             uri?.let {
                 // Persist access permissions for the URI
@@ -46,7 +65,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             LyricoTheme {
                 LyricoApp(
-                    launchDirectoryPicker = { openDirectoryLauncher.launch(null) }
                 )
             }
         }

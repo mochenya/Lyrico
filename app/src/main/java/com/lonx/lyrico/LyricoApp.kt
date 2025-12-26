@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -18,11 +19,19 @@ import com.lonx.lyrico.screens.SearchResultsScreen
 import com.lonx.lyrico.screens.SettingsScreen
 import com.lonx.lyrico.screens.SongListScreen
 import com.lonx.lyrics.model.SongSearchResult
+import com.lonx.lyrico.viewmodel.SongListViewModel
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
-fun LyricoApp(launchDirectoryPicker: () -> Unit) {
+fun LyricoApp() {
     val navController = rememberNavController()
+    val songListViewModel: SongListViewModel = koinViewModel()
+
+    // When the app's main UI is composed, trigger an initial scan if the database is empty.
+    // This runs only once when LyricoApp is first displayed after permissions are granted.
+    LaunchedEffect(Unit) {
+        songListViewModel.initialScanIfEmpty()
+    }
 
     Box(
         modifier = Modifier
@@ -81,8 +90,7 @@ fun LyricoApp(launchDirectoryPicker: () -> Unit) {
             }
             composable(Screen.Settings.route) {
                 SettingsScreen(
-                    onBackClick = { navController.popBackStack() },
-                    onAddFolderClick = { launchDirectoryPicker() }
+                    onBackClick = { navController.popBackStack() }
                 )
             }
         }
