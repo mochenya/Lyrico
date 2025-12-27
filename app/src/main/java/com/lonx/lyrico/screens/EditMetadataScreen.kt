@@ -36,7 +36,6 @@ import androidx.core.net.toUri
 import com.lonx.lyrico.data.model.LyricsSearchResult
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
-import com.ramcosta.composedestinations.annotation.parameters.DeepLink
 import com.ramcosta.composedestinations.generated.destinations.SearchResultsDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.result.ResultRecipient
@@ -45,7 +44,7 @@ import com.ramcosta.composedestinations.result.onResult
 @RequiresApi(Build.VERSION_CODES.Q)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-@Destination<RootGraph>(route = "edit_metadata_screen")
+@Destination<RootGraph>(route = "edit_metadata")
 fun EditMetadataScreen(
     navigator: DestinationsNavigator,
     songFilePath: String,

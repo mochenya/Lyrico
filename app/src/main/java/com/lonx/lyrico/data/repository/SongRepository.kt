@@ -8,6 +8,7 @@ import androidx.core.net.toUri
 import com.lonx.audiotag.model.AudioTagData
 import com.lonx.audiotag.rw.AudioTagReader
 import com.lonx.lyrico.data.LyricoDatabase
+import com.lonx.lyrico.data.model.SearchFilter
 import com.lonx.lyrico.data.model.SongEntity
 import com.lonx.lyrico.data.model.SongFile
 import com.lonx.lyrico.utils.MusicScanner
@@ -46,6 +47,18 @@ class SongRepository(
             }
             settingsManager.saveLastScanTime(System.currentTimeMillis())
         }
+    }
+
+    fun searchSongs(query: String, filter: SearchFilter): Flow<List<SongEntity>> {
+        return when (filter) {
+            SearchFilter.TITLE -> songDao.searchSongsByTitle(query)
+            SearchFilter.ARTIST -> songDao.searchSongsByArtist(query)
+            SearchFilter.ALBUM -> songDao.searchSongsByAlbum(query)
+        }
+    }
+
+    fun searchSongsByAll(query: String): Flow<List<SongEntity>> {
+        return songDao.searchSongsByAll(query)
     }
 
     /**

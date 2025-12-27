@@ -1,16 +1,11 @@
 package com.lonx.lyrico.screens
 
 import android.annotation.SuppressLint
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -28,18 +23,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
-import com.lonx.audiotag.model.AudioTagData
 import com.lonx.lyrico.data.model.SongEntity
 import com.lonx.lyrico.ui.theme.Gray200
 import com.lonx.lyrico.ui.theme.Gray400
-import com.lonx.lyrico.viewmodel.SongInfo
 import com.lonx.lyrico.viewmodel.SongListViewModel
 import com.lonx.lyrico.viewmodel.SortBy
 import com.lonx.lyrico.viewmodel.SortInfo
 import com.lonx.lyrico.viewmodel.SortOrder
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
-import com.ramcosta.composedestinations.generated.destinations.EditMetadataScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.EditMetadataDestination
+import com.ramcosta.composedestinations.generated.destinations.LocalSearchDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
@@ -50,10 +44,8 @@ import org.koin.androidx.compose.koinViewModel
 fun SongListScreen(
     navigator: DestinationsNavigator
 ) {
-    val showSearch = remember { mutableStateOf(false) }
     val viewModel: SongListViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
     val sortInfo by viewModel.sortInfo.collectAsState()
     val songs by viewModel.songs.collectAsState()
     var showSortMenu by remember { mutableStateOf(false) }
@@ -66,12 +58,11 @@ fun SongListScreen(
                     title = { Text("Lyrico") },
                     actions = {
                         IconButton(onClick = {
-                            showSearch.value = !showSearch.value
-                            if (!showSearch.value) viewModel.onSearchQueryChanged("")
+                            navigator.navigate(LocalSearchDestination())
                         }) {
                             Icon(
-                                if (showSearch.value) Icons.Default.Close else Icons.Default.Search,
-                                contentDescription = if (showSearch.value) "Close Search" else "Search"
+                                Icons.Default.Search,
+                                contentDescription = "Search"
                             )
                         }
                         Box {
@@ -95,36 +86,6 @@ fun SongListScreen(
                         }
                     }
                 )
-                AnimatedVisibility(
-                    visible = showSearch.value,
-                    enter = fadeIn(animationSpec = tween(durationMillis = 300)),
-                    exit = fadeOut(animationSpec = tween(durationMillis = 200))
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { viewModel.onSearchQueryChanged(it) },
-                            placeholder = { Text("Search by title, artist, album...") },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true,
-                            leadingIcon = {
-                                Icon(Icons.Default.Search, contentDescription = "Search", tint = Gray400)
-                            },
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
-                                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Gray400)
-                                    }
-                                }
-                            }
-                        )
-                    }
-                }
             }
         }
     ) { paddingValues ->
@@ -182,9 +143,11 @@ fun SongListItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = {
-                navigator.navigate(EditMetadataScreenDestination(
-                    songFilePath = song.filePath
-                ))
+                navigator.navigate(
+                    EditMetadataDestination(
+                        songFilePath = song.filePath
+                    )
+                )
             })
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {

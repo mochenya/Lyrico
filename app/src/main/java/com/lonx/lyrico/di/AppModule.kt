@@ -3,6 +3,7 @@ package com.lonx.lyrico.di
 import com.lonx.lyrico.utils.MusicScanner
 import com.lonx.lyrico.utils.SettingsManager
 import com.lonx.lyrico.viewmodel.EditMetadataViewModel
+import com.lonx.lyrico.viewmodel.LocalSearchViewModel
 import com.lonx.lyrico.viewmodel.SearchViewModel
 import com.lonx.lyrico.viewmodel.SettingsViewModel
 import com.lonx.lyrico.viewmodel.SongListViewModel
@@ -32,5 +33,6 @@ val appModule = module {
     viewModel { SettingsViewModel(get()) }
     viewModel { SearchViewModel(get(), get()) }
     viewModel { EditMetadataViewModel(get(), androidContext()) }
+    viewModel { LocalSearchViewModel(get()) }
 }
 

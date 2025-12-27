@@ -57,9 +57,6 @@ class SongListViewModel(
     private val _uiState = MutableStateFlow(SongListUiState())
     val uiState: StateFlow<SongListUiState> = _uiState.asStateFlow()
 
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
-
     private val _sortInfo = MutableStateFlow(SortInfo())
     val sortInfo: StateFlow<SortInfo> = _sortInfo.asStateFlow()
 
@@ -71,39 +68,27 @@ class SongListViewModel(
 
     val songs: StateFlow<List<SongEntity>> = combine(
         _allSongs,
-        _searchQuery.debounce(300),
         _sortInfo
-    ) { songs, query, sort ->
-        val filteredList = if (query.isBlank()) {
-            songs
-        } else {
-            songs.filter { song ->
-                song.title?.contains(query, ignoreCase = true) == true ||
-                        song.artist?.contains(query, ignoreCase = true) == true ||
-                        song.album?.contains(query, ignoreCase = true) == true ||
-                        song.fileName.contains(query, ignoreCase = true)
-            }
-        }
-
+    ) { songs, sort ->
         val collator = Collator.getInstance()
         val sortedList = when (sort.sortBy) {
             SortBy.TITLE -> {
                 val comparator = Comparator<SongEntity> { a, b ->
                     collator.compare(a.title ?: a.fileName, b.title ?: b.fileName)
                 }
-                filteredList.sortedWith(if (sort.order == SortOrder.ASC) comparator else comparator.reversed())
+                songs.sortedWith(if (sort.order == SortOrder.ASC) comparator else comparator.reversed())
             }
             SortBy.ARTIST -> {
                 val comparator = Comparator<SongEntity> { a, b ->
                     collator.compare(a.artist ?: "未知艺术家", b.artist ?: "未知艺术家")
                 }
-                filteredList.sortedWith(if (sort.order == SortOrder.ASC) comparator else comparator.reversed())
+                songs.sortedWith(if (sort.order == SortOrder.ASC) comparator else comparator.reversed())
             }
             SortBy.DATE_MODIFIED -> {
                 if (sort.order == SortOrder.ASC) {
-                    filteredList.sortedBy { it.fileLastModified }
+                    songs.sortedBy { it.fileLastModified }
                 } else {
-                    filteredList.sortedByDescending { it.fileLastModified }
+                    songs.sortedByDescending { it.fileLastModified }
                 }
             }
         }
@@ -150,10 +135,6 @@ class SongListViewModel(
 
     fun onSortChange(newSortInfo: SortInfo) {
         _sortInfo.value = newSortInfo
-    }
-
-    fun onSearchQueryChanged(query: String) {
-        _searchQuery.value = query
     }
 
     fun initialScanIfEmpty() {

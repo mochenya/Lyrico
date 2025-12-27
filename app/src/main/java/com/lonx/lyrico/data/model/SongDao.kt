@@ -53,6 +53,18 @@ interface SongDao {
     @Query("SELECT * FROM songs WHERE filePath = :filePath LIMIT 1")
     fun getSongByPathFlow(filePath: String): Flow<SongEntity?>
 
+    @Query("SELECT * FROM songs WHERE title LIKE '%' || :query || '%'")
+    fun searchSongsByTitle(query: String): Flow<List<SongEntity>>
+
+    @Query("SELECT * FROM songs WHERE artist LIKE '%' || :query || '%'")
+    fun searchSongsByArtist(query: String): Flow<List<SongEntity>>
+
+    @Query("SELECT * FROM songs WHERE album LIKE '%' || :query || '%'")
+    fun searchSongsByAlbum(query: String): Flow<List<SongEntity>>
+
+    @Query("SELECT * FROM songs WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' OR album LIKE '%' || :query || '%' ORDER BY CASE WHEN title LIKE '%' || :query || '%' THEN 1 WHEN artist LIKE '%' || :query || '%' THEN 2 WHEN album LIKE '%' || :query || '%' THEN 3 ELSE 4 END")
+    fun searchSongsByAll(query: String): Flow<List<SongEntity>>
+
     /**
      * 获取所有歌曲
      */
