@@ -101,6 +101,13 @@ class SongListViewModel(
 
     init {
         Log.d(TAG, "SongListViewModel 初始化")
+
+        viewModelScope.launch {
+            settingsManager.getSortInfo().collect { savedSortInfo ->
+                _sortInfo.value = savedSortInfo
+            }
+        }
+
         viewModelScope.launch {
             songRepository.getAllSongs().collect { songList ->
                 _allSongs.value = songList
@@ -135,6 +142,9 @@ class SongListViewModel(
 
     fun onSortChange(newSortInfo: SortInfo) {
         _sortInfo.value = newSortInfo
+        viewModelScope.launch {
+            settingsManager.saveSortInfo(newSortInfo)
+        }
     }
 
     fun initialScanIfEmpty() {

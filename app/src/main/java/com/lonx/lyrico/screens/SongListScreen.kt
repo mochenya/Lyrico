@@ -224,7 +224,7 @@ fun SongListItem(
                     // 分隔符 (如果专辑存在)
                     if (!song.album.isNullOrBlank()) {
                         Text(
-                            text = " • ${song.album}",
+                            text = " - ${song.album}",
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             fontSize = 13.sp,
                             maxLines = 1,

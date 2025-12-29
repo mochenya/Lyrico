@@ -12,6 +12,6 @@ enum class SortOrder {
 }
 
 data class SortInfo(
-    val sortBy: SortBy = SortBy.DATE_MODIFIED,
-    val order: SortOrder = SortOrder.DESC
+    val sortBy: SortBy = SortBy.TITLE,
+    val order: SortOrder = SortOrder.ASC
 )
