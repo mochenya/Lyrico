@@ -115,7 +115,14 @@ fun EditMetadataScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("元数据编辑") },
+                title = {
+                    val titleText = if (uiState.songInfo?.tagData?.title != null) {
+                        "${uiState.songInfo!!.tagData!!.title}"
+                    } else {
+                        uiState.songInfo?.fileName ?: "编辑元数据"
+                    }
+                    Text(titleText, maxLines = 1)
+                },
                 navigationIcon = {
                     IconButton(onClick = {
                         navigator.popBackStack()
