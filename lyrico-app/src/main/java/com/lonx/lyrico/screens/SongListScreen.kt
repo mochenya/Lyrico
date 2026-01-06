@@ -6,7 +6,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,6 +19,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -24,21 +27,38 @@ import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.lonx.lyrico.data.model.SongEntity
+import com.lonx.lyrico.ui.components.bar.TopBar
 import com.lonx.lyrico.ui.theme.Gray200
 import com.lonx.lyrico.ui.theme.Gray400
 import com.lonx.lyrico.viewmodel.SongListViewModel
 import com.lonx.lyrico.viewmodel.SortBy
 import com.lonx.lyrico.viewmodel.SortInfo
 import com.lonx.lyrico.viewmodel.SortOrder
+import com.moriafly.salt.ui.Icon
+import com.moriafly.salt.ui.ItemDivider
+import com.moriafly.salt.ui.SaltTheme
+import com.moriafly.salt.ui.Text
+import com.moriafly.salt.ui.UnstableSaltUiApi
+import com.moriafly.salt.ui.noRippleClickable
+import com.moriafly.salt.ui.popup.PopupMenu
+import com.moriafly.salt.ui.popup.PopupMenuItem
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.EditMetadataDestination
 import com.ramcosta.composedestinations.generated.destinations.LocalSearchDestination
 import com.ramcosta.composedestinations.generated.destinations.SettingsDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.rememberHazeState
 import org.koin.androidx.compose.koinViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(
+    ExperimentalMaterial3Api::class, UnstableSaltUiApi::class,
+    ExperimentalHazeMaterialsApi::class
+)
 @Composable
 @Destination<RootGraph>(start = true, route = "song_list")
 fun SongListScreen(
@@ -48,53 +68,120 @@ fun SongListScreen(
     val uiState by viewModel.uiState.collectAsState()
     val sortInfo by viewModel.sortInfo.collectAsState()
     val songs by viewModel.songs.collectAsState()
-    var showSortMenu by remember { mutableStateOf(false) }
+    var sortOrderDropdownExpanded by remember { mutableStateOf(false) }
 
+    // 创建 Haze 状态
+    val hazeState = rememberHazeState()
 
     Scaffold(
+        modifier = Modifier.background(SaltTheme.colors.background),
         topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text("Lyrico") },
-                    actions = {
-                        IconButton(onClick = {
-                            navigator.navigate(LocalSearchDestination())
-                        }) {
-                            Icon(
-                                Icons.Default.Search,
-                                contentDescription = "Search"
-                            )
-                        }
-                        Box {
-                            IconButton(onClick = { showSortMenu = true }) {
-                                Icon(Icons.Default.SwapVert, contentDescription = "Sort")
-                            }
-                            SortMenu(
-                                expanded = showSortMenu,
-                                currentSortInfo = sortInfo,
-                                onDismissRequest = { showSortMenu = false },
-                                onSortSelected = {
-                                    viewModel.onSortChange(it)
-                                    showSortMenu = false
+            Column(
+                modifier = Modifier.hazeEffect(
+                    state = hazeState,
+                    style = HazeMaterials.thin(containerColor = SaltTheme.colors.background)
+                )
+            ) {
+                TopBar(
+                    backgroundColor = Color.Transparent,
+                    text = "歌曲(${songs.size}首)",
+                    navigationIcon =  {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = SaltTheme.colors.text,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .noRippleClickable(role = Role.Button) {
+                                    navigator.navigate(SettingsDestination())
                                 }
+                                .padding(12.dp)
+                        )
+                    },
+                    actions = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = SaltTheme.colors.text,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .noRippleClickable(role = Role.Button) {
+                                    navigator.navigate(
+                                        LocalSearchDestination()
+                                    )
+                                }
+                                .padding(12.dp)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .wrapContentSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Sort,
+                                contentDescription = "Sort",
+                                tint = SaltTheme.colors.text,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .noRippleClickable(role = Role.Button) {
+                                        sortOrderDropdownExpanded = true
+                                    }
+                                    .padding(8.dp)
                             )
-                        }
-                        IconButton(onClick = {
-                            navigator.navigate(SettingsDestination())
-                        }) {
-                            Icon(Icons.Filled.Settings, contentDescription = "Settings")
+
+                            PopupMenu(
+                                expanded = sortOrderDropdownExpanded,
+                                onDismissRequest = {
+                                    sortOrderDropdownExpanded = false
+                                }
+                            ) {
+                                val sorts = listOf(
+                                    SortInfo(SortBy.TITLE, SortOrder.ASC),
+                                    SortInfo(SortBy.TITLE, SortOrder.DESC),
+                                    SortInfo(SortBy.DATE_MODIFIED, SortOrder.ASC),
+                                    SortInfo(SortBy.DATE_MODIFIED, SortOrder.DESC),
+                                    SortInfo(SortBy.ARTIST, SortOrder.ASC),
+                                    SortInfo(SortBy.ARTIST, SortOrder.DESC)
+                                )
+
+                                sorts.forEach { info ->
+                                    val text = when (info.sortBy) {
+                                        SortBy.TITLE -> "歌曲名"
+                                        SortBy.DATE_MODIFIED -> "修改时间"
+                                        SortBy.ARTIST -> "歌手"
+                                    } + if (info.order == SortOrder.ASC) " (升序)" else " (降序)"
+
+                                    PopupMenuItem(
+                                        text = text,
+                                        onClick = {
+                                            viewModel.onSortChange(info)
+                                            sortOrderDropdownExpanded = false
+                                        },
+                                        selected = info == sortInfo
+                                    )
+                                }
+                            }
                         }
                     }
                 )
+
             }
         }
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .background(SaltTheme.colors.background)
         ) {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState),
+                contentPadding = PaddingValues(
+                    top = paddingValues.calculateTopPadding(),
+                    bottom = paddingValues.calculateBottomPadding()
+                )
+            ) {
                 items(
                     items = songs,
                     key = { song -> song.filePath }
@@ -104,7 +191,7 @@ fun SongListScreen(
                         navigator = navigator,
                         modifier = Modifier.animateItem()
                     )
-                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ItemDivider()
                 }
             }
 
@@ -113,8 +200,10 @@ fun SongListScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        // 遮罩层背景，覆盖在列表之上
                         .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
-                        .clickable(enabled = false, onClick = {}), // Block clicks
+                        // 拦截点击事件
+                        .clickable(enabled = false, onClick = {}),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
@@ -122,8 +211,7 @@ fun SongListScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = uiState.loadingMessage ?: "正在扫描...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = SaltTheme.colors.text,
                         overflow = TextOverflow.Ellipsis,
                         maxLines = 1,
                         modifier = Modifier.padding(horizontal = 32.dp)
@@ -161,7 +249,7 @@ fun SongListItem(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(6.dp))
                     .background(Gray200)
             ) {
                 AsyncImage(

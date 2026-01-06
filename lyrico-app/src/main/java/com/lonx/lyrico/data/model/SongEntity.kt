@@ -18,7 +18,6 @@ import androidx.room.PrimaryKey
  * @param sampleRate 采样率
  * @param channels 声道数
  * @param rawProperties 原始属性JSON字符串
- * @param coverPath 封面图片缓存路径
  * @param fileLastModified 文件最后修改时间戳
  * @param dbUpdateTime 数据库更新时间
  */

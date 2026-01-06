@@ -10,9 +10,11 @@ import com.lonx.lyrics.model.SongSearchResult
 import com.lonx.lyrics.model.Source
 import com.lonx.lyrics.source.kg.KgSource
 import com.lonx.lyrics.source.qm.QmSource
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -24,12 +26,11 @@ data class SearchUiState(
     val availableSources: List<Source> = listOf(Source.KG, Source.QM),
     val isSearching: Boolean = false,
     val searchError: String? = null,
-    // For lyrics preview
+    // 歌词预览相关
     val previewingSong: SongSearchResult? = null,
     val lyricsPreviewContent: String? = null,
     val isPreviewLoading: Boolean = false,
     val lyricsPreviewError: String? = null,
-    val separator: String = "/",
 )
 
 class SearchViewModel(
@@ -40,92 +41,129 @@ class SearchViewModel(
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
-    
-    // 缓存搜索结果，以关键字和搜索源为键
-    private val searchResultCache = mutableMapOf<String, MutableMap<Source, List<SongSearchResult>>>()
-    init {
-        viewModelScope.launch {
-            settingsManager.getSeparator().collect { separator ->
-            _uiState.update {
-                it.copy(
-                    separator = separator
-                )
-            }
-        } }
-    }
+
+    // 缓存搜索结果：Keyword -> (Source -> Results)
+    private val searchResultCache =
+        mutableMapOf<String, MutableMap<Source, List<SongSearchResult>>>()
+
+    // 用于管理当前的搜索任务和歌词任务，防止并发冲突
+    private var searchJob: Job? = null
+    private var lyricsJob: Job? = null
+
+    /**
+     * 当输入框文字改变时调用
+     * 注意：这里只更新状态，不直接触发网络搜索（避免打字时频繁请求）
+     */
     fun onKeywordChanged(keyword: String) {
         _uiState.update { it.copy(searchKeyword = keyword) }
     }
 
+    /**
+     * 切换搜索源
+     * 如果当前有关键词，会尝试从缓存读取或重新发起搜索
+     */
     fun switchSource(source: Source) {
-        // If keyword is blank, just switch the source and clear results, no search needed.
-        if (_uiState.value.searchKeyword.isBlank()) {
-            _uiState.update { it.copy(selectedSearchSource = source, searchResults = emptyList()) }
-            return
-        }
-
         val currentKeyword = _uiState.value.searchKeyword
-        val cachedResults = getCachedResults(currentKeyword, source)
 
+        // 更新选中的源
         _uiState.update { it.copy(selectedSearchSource = source) }
 
-        if (cachedResults != null) {
-            // Cache hit, just update the UI
-            _uiState.update { it.copy(searchResults = cachedResults) }
-        } else {
-            // Cache miss for the new source, so perform a search
-            search()
-        }
-    }
-
-    fun search(keywordToSearch: String? = null) {
-        val keyword = keywordToSearch ?: _uiState.value.searchKeyword
-        if (keyword.isBlank()) {
+        if (currentKeyword.isBlank()) {
             _uiState.update { it.copy(searchResults = emptyList()) }
             return
         }
 
-        // If a new keyword is passed, ensure the state is updated
+        val cachedResults = getCachedResults(currentKeyword, source)
+        if (cachedResults != null) {
+            // 命中缓存，直接显示
+            _uiState.update { it.copy(searchResults = cachedResults, searchError = null) }
+        } else {
+            // 未命中缓存，发起搜索
+            search()
+        }
+    }
+
+    /**
+     * 执行搜索
+     * @param keywordToSearch 可选参数，如果传入则更新状态并搜索，否则使用当前状态的关键词
+     */
+    fun search(keywordToSearch: String? = null) {
+        val keyword = keywordToSearch ?: _uiState.value.searchKeyword
+
+        // 如果传入了新关键词，先更新 UI
         if (keywordToSearch != null) {
             _uiState.update { it.copy(searchKeyword = keyword) }
         }
 
-        viewModelScope.launch {
-            val currentSource = _uiState.value.selectedSearchSource
+        if (keyword.isBlank()) {
+            _uiState.update { it.copy(searchResults = emptyList(), isSearching = false) }
+            return
+        }
+
+        // 1. 取消上一次正在进行的搜索（防止快速点击导致结果错乱）
+        searchJob?.cancel()
+
+        // 2. 开启新协程
+        searchJob = viewModelScope.launch {
             _uiState.update { it.copy(isSearching = true, searchError = null) }
+
             try {
+                // 再次检查缓存（防止在等待协程启动时状态变化，虽然在 switchSource 处理了，但双重保障无害）
+                val currentSource = _uiState.value.selectedSearchSource
+                val cached = getCachedResults(keyword, currentSource)
+                if (cached != null) {
+                    _uiState.update { it.copy(searchResults = cached, isSearching = false) }
+                    return@launch
+                }
+
+                // 执行网络请求
+                val separator = settingsManager.getSeparator().first()
                 val results = when (currentSource) {
-                    Source.KG -> kgSource.search(keyword, separator = _uiState.value.separator)
-                    Source.QM -> qmSource.search(keyword, separator = _uiState.value.separator)
+                    Source.KG -> kgSource.search(keyword, separator = separator)
+                    Source.QM -> qmSource.search(keyword, separator = separator)
                     else -> emptyList()
                 }
+
+                // 写入缓存
                 cacheSearchResults(keyword, currentSource, results)
+
+                // 更新 UI
                 _uiState.update { it.copy(searchResults = results, isSearching = false) }
+
             } catch (e: Exception) {
-                _uiState.update { it.copy(searchError = "Search failed: ${e.message}", isSearching = false) }
+                // 如果是协程被取消（cancel），不应该视为错误显示给用户
+                if (e is kotlinx.coroutines.CancellationException) throw e
+
+                _uiState.update {
+                    it.copy(
+                        searchError = "搜索失败: ${e.message}",
+                        isSearching = false
+                    )
+                }
             }
         }
     }
-    
-    private fun cacheSearchResults(keyword: String, source: Source, results: List<SongSearchResult>) {
+
+    // --- 缓存逻辑 ---
+    private fun cacheSearchResults(
+        keyword: String,
+        source: Source,
+        results: List<SongSearchResult>
+    ) {
         val keywordCache = searchResultCache.getOrPut(keyword) { mutableMapOf() }
         keywordCache[source] = results
     }
-    
+
     private fun getCachedResults(keyword: String, source: Source): List<SongSearchResult>? {
         return searchResultCache[keyword]?.get(source)
     }
-    
-    fun clearCache() {
-        searchResultCache.clear()
-    }
-    
-    fun clearCacheForKeyword(keyword: String) {
-        searchResultCache.remove(keyword)
-    }
 
+    // --- 歌词预览逻辑 ---
     fun fetchLyricsForPreview(song: SongSearchResult) {
-        viewModelScope.launch {
+        // 取消上一次的歌词加载（防止用户快速点击不同歌曲）
+        lyricsJob?.cancel()
+
+        lyricsJob = viewModelScope.launch {
             _uiState.update {
                 it.copy(
                     previewingSong = song,
@@ -140,19 +178,21 @@ class SearchViewModel(
                     Source.QM -> qmSource.getLyrics(song)
                     else -> null
                 }
-                
-                val lyricsText = lyricsResult?.let { formatLrcResult(it) }
+
+                val romaEnabled = settingsManager.getRomaEnabled().first()
+                val lyricsText = lyricsResult?.let { formatLrcResult(result = it, romaEnabled = romaEnabled) }
 
                 _uiState.update {
                     it.copy(
-                        lyricsPreviewContent = lyricsText ?: "No lyrics found for this song.",
+                        lyricsPreviewContent = lyricsText ?: "暂无歌词",
                         isPreviewLoading = false
                     )
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 _uiState.update {
                     it.copy(
-                        lyricsPreviewError = "Failed to load lyrics: ${e.message}",
+                        lyricsPreviewError = "加载失败: ${e.message}",
                         isPreviewLoading = false
                     )
                 }
@@ -168,8 +208,9 @@ class SearchViewModel(
                     Source.QM -> qmSource.getLyrics(song)
                     else -> null
                 }
-                
-                val lyricsText = lyricsResult?.let { formatLrcResult(it) }
+
+                val romaEnabled = settingsManager.getRomaEnabled().first()
+                val lyricsText = lyricsResult?.let { formatLrcResult(result = it, romaEnabled = romaEnabled) }
                 onResult(lyricsText)
             } catch (e: Exception) {
                 onResult(null)
@@ -178,6 +219,8 @@ class SearchViewModel(
     }
 
     fun clearPreview() {
+        // 关闭预览时也可以取消正在进行的加载任务
+        lyricsJob?.cancel()
         _uiState.update {
             it.copy(
                 previewingSong = null,
@@ -189,6 +232,8 @@ class SearchViewModel(
     }
 }
 
+// --- 辅助函数保持不变 ---
+
 @SuppressLint("DefaultLocale")
 private fun formatTimestamp(millis: Long): String {
     val totalSeconds = millis / 1000
@@ -198,14 +243,11 @@ private fun formatTimestamp(millis: Long): String {
     return String.format("%02d:%02d.%03d", minutes, seconds, ms)
 }
 
-private fun formatLrcResult(result: LyricsResult): String {
+private fun formatLrcResult(result: LyricsResult, romaEnabled: Boolean = false): String {
     val builder = StringBuilder()
     val originalLines = result.original
     val translatedLines = result.translated
-    val romanizationLines = result.romanization
-
     val translatedMap = translatedLines?.associateBy { it.start } ?: emptyMap()
-    val romanizationMap = romanizationLines?.associateBy { it.start } ?: emptyMap()
 
     originalLines.forEach { originalLine ->
         val formattedOriginalLine = originalLine.words.joinToString("") { word ->
@@ -214,29 +256,36 @@ private fun formatLrcResult(result: LyricsResult): String {
         builder.append(formattedOriginalLine)
         builder.append("\n")
 
-        // Find a matching translated line. A tolerance of 500ms is used to match lines.
         val matchedTranslation = findMatchingTranslatedLine(originalLine, translatedMap)
-        val matchedRomanization = findMatchingTranslatedLine(originalLine, romanizationMap)
 
         if (matchedTranslation != null) {
-            val formattedTranslatedLine = "[${formatTimestamp(matchedTranslation.start)}]${matchedTranslation.words.joinToString(" ") { it.text }}"
+            val formattedTranslatedLine = "[${formatTimestamp(matchedTranslation.start)}]${
+                matchedTranslation.words.joinToString(" ") { it.text }
+            }"
             builder.append(formattedTranslatedLine)
             builder.append("\n")
         }
-        if (matchedRomanization != null) {
-            val formattedRomanizationLine = "[${formatTimestamp(matchedRomanization.start)}]${matchedRomanization.words.joinToString(" ") { it.text }}"
-            builder.append(formattedRomanizationLine)
-            builder.append("\n")
+        if (romaEnabled) {
+            val romanizationLines = result.romanization
+            val romanizationMap = romanizationLines?.associateBy { it.start } ?: emptyMap()
+            val matchedRomanization = findMatchingTranslatedLine(originalLine, romanizationMap)
+            if (matchedRomanization != null) {
+                val formattedRomanizationLine = "[${formatTimestamp(matchedRomanization.start)}]${
+                    matchedRomanization.words.joinToString(" ") { it.text }
+                }"
+                builder.append(formattedRomanizationLine)
+                builder.append("\n")
+            }
         }
     }
     return builder.toString().trim()
 }
 
-private fun findMatchingTranslatedLine(originalLine: LyricsLine, translatedMap: Map<Long, LyricsLine>): LyricsLine? {
-    // Exact match
+private fun findMatchingTranslatedLine(
+    originalLine: LyricsLine,
+    translatedMap: Map<Long, LyricsLine>
+): LyricsLine? {
     val matched = translatedMap[originalLine.start]
     if (matched != null) return matched
-
-    // Fuzzy match within a tolerance
     return translatedMap.entries.find { abs(it.key - originalLine.start) < 500 }?.value
 }

@@ -1,38 +1,47 @@
 package com.lonx.lyrico.screens
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+// 关键：导入 Haze 相关库
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
+
 import com.lonx.lyrico.data.model.LyricDisplayMode
 import com.lonx.lyrico.viewmodel.SettingsViewModel
+import com.moriafly.salt.ui.ItemCheck
+import com.moriafly.salt.ui.ItemDropdown
+import com.moriafly.salt.ui.ItemOuterTitle
+import com.moriafly.salt.ui.ItemSwitcher
+import com.moriafly.salt.ui.RoundedColumn
+import com.moriafly.salt.ui.UnstableSaltUiApi
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
+import com.lonx.lyrico.data.model.ArtistSeparator
+import com.lonx.lyrico.data.model.toChar
+import com.moriafly.salt.ui.rememberScrollState
+import com.moriafly.salt.ui.verticalScroll
+import com.lonx.lyrico.ui.components.bar.TopBar
+import com.moriafly.salt.ui.SaltTheme
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(
+    ExperimentalMaterial3Api::class, UnstableSaltUiApi::class,
+    ExperimentalHazeMaterialsApi::class
+)
 @Composable
 @Destination<RootGraph>(route = "settings")
 fun SettingsScreen(
@@ -41,78 +50,94 @@ fun SettingsScreen(
     val viewModel: SettingsViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsState()
     val lyricDisplayMode = uiState.lyricDisplayMode
+    val artistSeparator = uiState.separator
+    val romaEnabled = uiState.romaEnabled
+    val scrollState = rememberScrollState()
+    val hazeState = rememberHazeState()
 
     Scaffold(
+        modifier = Modifier.fillMaxSize().background(SaltTheme.colors.background),
         topBar = {
-            TopAppBar(
-                title = { Text("设置") },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        navigator.popBackStack()
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                }
+            TopBar(
+                text = "设置",
+                onBack = { navigator.popBackStack() },
+                backgroundColor = Color.Transparent,
+                modifier = Modifier.hazeEffect(state = hazeState, style = HazeMaterials.thin(containerColor = SaltTheme.colors.background))
             )
         }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .background(SaltTheme.colors.background)
+                .hazeSource(state = hazeState)
+                .verticalScroll(scrollState)
         ) {
-            // Lyric Display Mode Section
-            SettingSectionTitle("歌词模式")
-            LyricDisplayModeItem(
-                mode = LyricDisplayMode.WORD_BY_WORD,
-                selectedMode = lyricDisplayMode,
-                onClick = { viewModel.setLyricDisplayMode(it) }
-            )
-            LyricDisplayModeItem(
-                mode = LyricDisplayMode.LINE_BY_LINE,
-                selectedMode = lyricDisplayMode,
-                onClick = { viewModel.setLyricDisplayMode(it) }
-            )
+            Spacer(modifier = Modifier.height(paddingValues.calculateTopPadding()))
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            ItemOuterTitle("歌词")
+            RoundedColumn {
+                ItemDropdown(
+                    text = "歌词模式",
+                    enabled = false,
+                    sub = "暂未实现具体逻辑",
+                    value = if (lyricDisplayMode == LyricDisplayMode.WORD_BY_WORD) {
+                        "逐字歌词"
+                    } else "逐行歌词",
+                    content = {
+                        ItemCheck(
+                            text = "逐字歌词",
+                            state = lyricDisplayMode == LyricDisplayMode.WORD_BY_WORD,
+                            onChange = {
+                                viewModel.setLyricDisplayMode(LyricDisplayMode.WORD_BY_WORD)
+                                state.dismiss()
+                            }
+                        )
+                        ItemCheck(
+                            text = "逐行歌词",
+                            state = lyricDisplayMode == LyricDisplayMode.LINE_BY_LINE,
+                            onChange = {
+                                viewModel.setLyricDisplayMode(LyricDisplayMode.LINE_BY_LINE)
+                                state.dismiss()
+                            }
+                        )
+                    },
+                )
+                ItemSwitcher(
+                    state = romaEnabled,
+                    onChange = viewModel::setRomaEnabled,
+                    text = "罗马音",
+                    sub = "搜索歌词中包含罗马音"
+                )
+            }
+            ItemOuterTitle("元数据")
+            RoundedColumn {
+                ItemDropdown(
+                    text = "艺术家分隔符",
+                    value = artistSeparator.toChar(),
+                    sub = "存在多个艺术家时使用该分隔符分隔",
+                    content = {
+                        val separators = listOf(
+                            ArtistSeparator.ENUMERATION_COMMA,
+                            ArtistSeparator.SLASH,
+                            ArtistSeparator.COMMA,
+                            ArtistSeparator.SEMICOLON
+                        )
+                        separators.forEach { separator ->
+                            ItemCheck(
+                                text = separator.toChar(),
+                                state = artistSeparator == separator,
+                                onChange = {
+                                    viewModel.setSeparator(separator)
+                                    state.dismiss()
+                                }
+                            )
+                        }
+                    }
+                )
+            }
 
-            // You can add other settings below, e.g., Theme, Rescan Library, etc.
+            Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding()))
         }
-    }
-}
-
-@Composable
-private fun SettingSectionTitle(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        color = MaterialTheme.colorScheme.primary
-    )
-}
-
-@Composable
-fun LyricDisplayModeItem(
-    mode: LyricDisplayMode,
-    selectedMode: LyricDisplayMode,
-    onClick: (LyricDisplayMode) -> Unit
-) {
-    val title = when (mode) {
-        LyricDisplayMode.WORD_BY_WORD -> "逐字歌词"
-        LyricDisplayMode.LINE_BY_LINE -> "逐行歌词"
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick(mode) }
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        RadioButton(
-            selected = selectedMode == mode,
-            onClick = { onClick(mode) }
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(title)
     }
 }

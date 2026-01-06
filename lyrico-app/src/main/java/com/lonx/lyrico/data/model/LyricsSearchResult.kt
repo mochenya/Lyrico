@@ -8,5 +8,6 @@ data class LyricsSearchResult(
     val title: String?,
     val artist: String?,
     val album: String?,
-    val lyrics: String?
+    val lyrics: String?,
+    val date: String?
 ) : Parcelable

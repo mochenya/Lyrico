@@ -35,6 +35,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.core.net.toUri
 import com.lonx.lyrico.data.model.LyricsSearchResult
+import com.lonx.lyrico.ui.components.bar.TopBar
+import com.moriafly.salt.ui.SaltTheme
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.SearchResultsDestination
@@ -112,17 +114,18 @@ fun EditMetadataScreen(
     }
 
     Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(SaltTheme.colors.background),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    val titleText = if (uiState.songInfo?.tagData?.title != null) {
-                        "${uiState.songInfo!!.tagData!!.title}"
-                    } else {
-                        uiState.songInfo?.fileName ?: "编辑元数据"
-                    }
-                    Text(titleText, maxLines = 1)
-                },
+            val titleText = if (uiState.songInfo?.tagData?.title != null) {
+                "${uiState.songInfo!!.tagData!!.title}"
+            } else {
+                uiState.songInfo?.fileName ?: "编辑元数据"
+            }
+            TopBar(
+                text = titleText,
                 navigationIcon = {
                     IconButton(onClick = {
                         navigator.popBackStack()
@@ -158,142 +161,181 @@ fun EditMetadataScreen(
                             Icon(Icons.Default.Save, contentDescription = "保存")
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Gray50)
+                }
             )
-        },
-        containerColor = Gray50
+        }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .imePadding()
-                .verticalScroll(scrollState)
-        ) {
-            AsyncImage(
-                model = uiState.filePath?.toUri(),
-                contentDescription = uiState.songInfo?.tagData?.title ?: "歌曲封面",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                placeholder = rememberVectorPainter(Icons.Default.MusicNote),
-                error = rememberVectorPainter(Icons.Default.MusicNote)
-            )
-
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .background(SaltTheme.colors.background))
+        {
             Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .imePadding()
+                    .verticalScroll(scrollState)
             ) {
-                MetadataInputGroup(
-                    label = "标题",
-                    value = editingTagData?.title ?: "",
-                    onValueChange = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(title = it)) },
-                    isModified = editingTagData?.title != originalTagData?.title,
-                    onRevert = {
-                        viewModel.onUpdateEditingTagData(
-                            editingTagData!!.copy(
-                                title = originalTagData?.title ?: ""
-                            )
-                        )
-                    },
-                    icon = Icons.Default.Title
+                AsyncImage(
+                    model = uiState.filePath?.toUri(),
+                    contentDescription = uiState.songInfo?.tagData?.title ?: "歌曲封面",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    placeholder = rememberVectorPainter(Icons.Default.MusicNote),
+                    error = rememberVectorPainter(Icons.Default.MusicNote)
                 )
 
-                MetadataInputGroup(
-                    label = "艺术家",
-                    value = editingTagData?.artist ?: "",
-                    onValueChange = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(artist = it)) },
-                    isModified = editingTagData?.artist != originalTagData?.artist,
-                    onRevert = {
-                        viewModel.onUpdateEditingTagData(
-                            editingTagData!!.copy(
-                                artist = originalTagData?.artist ?: ""
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    MetadataInputGroup(
+                        label = "标题",
+                        value = editingTagData?.title ?: "",
+                        onValueChange = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    title = it
+                                )
                             )
-                        )
-                    },
-                    icon = Icons.Default.Person
-                )
+                        },
+                        isModified = editingTagData?.title != originalTagData?.title,
+                        onRevert = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    title = originalTagData?.title ?: ""
+                                )
+                            )
+                        },
+                        icon = Icons.Default.Title
+                    )
 
-                MetadataInputGroup(
-                    label = "专辑",
-                    value = editingTagData?.album ?: "",
-                    onValueChange = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(album = it)) },
-                    isModified = editingTagData?.album != originalTagData?.album,
-                    onRevert = {
-                        viewModel.onUpdateEditingTagData(
-                            editingTagData!!.copy(
-                                album = originalTagData?.album ?: ""
+                    MetadataInputGroup(
+                        label = "艺术家",
+                        value = editingTagData?.artist ?: "",
+                        onValueChange = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    artist = it
+                                )
                             )
-                        )
-                    },
-                    icon = Icons.Default.Album
-                )
+                        },
+                        isModified = editingTagData?.artist != originalTagData?.artist,
+                        onRevert = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    artist = originalTagData?.artist ?: ""
+                                )
+                            )
+                        },
+                        icon = Icons.Default.Person
+                    )
 
-                MetadataInputGroup(
-                    label = "年份",
-                    value = editingTagData?.date ?: "",
-                    onValueChange = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(date = it)) },
-                    isModified = editingTagData?.date != originalTagData?.date,
-                    onRevert = {
-                        viewModel.onUpdateEditingTagData(
-                            editingTagData!!.copy(
-                                date = originalTagData?.date ?: ""
+                    MetadataInputGroup(
+                        label = "专辑",
+                        value = editingTagData?.album ?: "",
+                        onValueChange = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    album = it
+                                )
                             )
-                        )
-                    },
-                    icon = Icons.Default.CalendarToday
-                )
+                        },
+                        isModified = editingTagData?.album != originalTagData?.album,
+                        onRevert = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    album = originalTagData?.album ?: ""
+                                )
+                            )
+                        },
+                        icon = Icons.Default.Album
+                    )
 
-                MetadataInputGroup(
-                    label = "流派",
-                    value = editingTagData?.genre ?: "",
-                    onValueChange = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(genre = it)) },
-                    isModified = editingTagData?.genre != originalTagData?.genre,
-                    onRevert = {
-                        viewModel.onUpdateEditingTagData(
-                            editingTagData!!.copy(
-                                genre = originalTagData?.genre ?: ""
+                    MetadataInputGroup(
+                        label = "年份",
+                        value = editingTagData?.date ?: "",
+                        onValueChange = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    date = it
+                                )
                             )
-                        )
-                    },
-                    icon = Icons.Default.Category
-                )
+                        },
+                        isModified = editingTagData?.date != originalTagData?.date,
+                        onRevert = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    date = originalTagData?.date ?: ""
+                                )
+                            )
+                        },
+                        icon = Icons.Default.CalendarToday
+                    )
 
-                MetadataInputGroup(
-                    label = "音轨",
-                    value = editingTagData?.channels.toString(),
-                    onValueChange = {
-                        viewModel.onUpdateEditingTagData(
-                            editingTagData!!.copy(channels = it.toIntOrNull() ?: 0)
-                        )
-                    },
-                    isModified = editingTagData?.channels != originalTagData?.channels,
-                    onRevert = {
-                        viewModel.onUpdateEditingTagData(
-                            editingTagData!!.copy(
-                                channels = originalTagData?.channels ?: 0
+                    MetadataInputGroup(
+                        label = "流派",
+                        value = editingTagData?.genre ?: "",
+                        onValueChange = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    genre = it
+                                )
                             )
-                        )
-                    },
-                    icon = Icons.AutoMirrored.Filled.QueueMusic
-                )
+                        },
+                        isModified = editingTagData?.genre != originalTagData?.genre,
+                        onRevert = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    genre = originalTagData?.genre ?: ""
+                                )
+                            )
+                        },
+                        icon = Icons.Default.Category
+                    )
 
-                MetadataInputGroup(
-                    label = "歌词",
-                    value = editingTagData?.lyrics ?: "",
-                    onValueChange = { viewModel.onUpdateEditingTagData(editingTagData!!.copy(lyrics = it)) },
-                    isModified = editingTagData?.lyrics != originalTagData?.lyrics,
-                    onRevert = {
-                        viewModel.onUpdateEditingTagData(
-                            editingTagData!!.copy(
-                                lyrics = originalTagData?.lyrics ?: ""
+                    MetadataInputGroup(
+                        label = "音轨",
+                        value = editingTagData?.channels.toString(),
+                        onValueChange = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(channels = it.toIntOrNull() ?: 0)
                             )
-                        )
-                    },
-                    isMultiline = true,
-                    icon = Icons.AutoMirrored.Filled.List
-                )
-                Spacer(modifier = Modifier.height(200.dp))
+                        },
+                        isModified = editingTagData?.channels != originalTagData?.channels,
+                        onRevert = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    channels = originalTagData?.channels ?: 0
+                                )
+                            )
+                        },
+                        icon = Icons.AutoMirrored.Filled.QueueMusic
+                    )
+
+                    MetadataInputGroup(
+                        label = "歌词",
+                        value = editingTagData?.lyrics ?: "",
+                        onValueChange = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    lyrics = it
+                                )
+                            )
+                        },
+                        isModified = editingTagData?.lyrics != originalTagData?.lyrics,
+                        onRevert = {
+                            viewModel.onUpdateEditingTagData(
+                                editingTagData!!.copy(
+                                    lyrics = originalTagData?.lyrics ?: ""
+                                )
+                            )
+                        },
+                        isMultiline = true,
+                        icon = Icons.AutoMirrored.Filled.List
+                    )
+                    Spacer(modifier = Modifier.height(200.dp))
+                }
             }
         }
     }
