@@ -12,7 +12,9 @@ import com.lonx.lyrics.utils.QmCryptoUtils
 import com.lonx.lyrics.utils.QrcParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -72,27 +74,23 @@ class QmSource {
         )
 
         try {
-            val resp = api.request(reqBody)
-            // 解析 resp -> req_0 -> data -> body -> item_song
-            val data = resp["req_0"]?.jsonObject?.get("data")?.jsonObject
-            val body = data?.get("body")?.jsonObject
-            val songs = body?.get("item_song")?.jsonArray
+            val resp = api.searchSong(reqBody)
+            val songs = resp.req_0.data?.body?.songs ?: emptyList()
 
-            return@withContext songs?.mapNotNull { it.jsonObject }?.map { item ->
-                val singerList = item["singer"]?.jsonArray?.map { it.jsonObject["name"]?.jsonPrimitive?.content ?: "" } ?: emptyList()
-                val album = item["album"]?.jsonObject?.get("name")?.jsonPrimitive?.content ?: ""
+            return@withContext songs.map { item ->
+                val singerList = item.singer.map { it.name }
 
                 SongSearchResult(
-                    id = item["id"]?.jsonPrimitive?.content ?: "0", // songID
-                    mid = item["mid"]?.jsonPrimitive?.content ?: "", // songMID (关键)
-                    title = item["title"]?.jsonPrimitive?.content ?: "",
+                    id = item.id,
+                    mid = item.mid,
+                    title = item.title,
                     artist = singerList.joinToString(separator),
-                    album = album,
-                    duration = (item["interval"]?.jsonPrimitive?.int ?: 0) * 1000L,
+                    album = item.album.name,
+                    duration = item.interval * 1000L,
                     source = Source.QM,
-                    date = item["time_public"]?.jsonPrimitive?.content ?: "",
+                    date = item.timePublic ?: "",
                 )
-            } ?: emptyList()
+            }
 
         } catch (e: Exception) {
             Log.e("QmSource", "Search failed", e)
@@ -133,23 +131,24 @@ class QmSource {
         )
 
         try {
-            val resp = api.request(reqBody)
-            val data = resp["req_0"]?.jsonObject?.get("data")?.jsonObject ?: return@withContext null
+            val resp = api.getLyrics(reqBody)
+            val data = resp.req_0.data ?: return@withContext null
 
             // 提取 QRC (lyric)
-            val lyricHex = data["lyric"]?.jsonPrimitive?.content ?: ""
+            val lyricHex = data.lyric
             var qrcText = ""
 
             if (lyricHex.isNotEmpty()) {
                 // 解密 QRC
                 logLargeString("QRC", lyricHex)
                 qrcText = QmCryptoUtils.decryptQrc(lyricHex)
+                Log.d("QmSource", "Decrypt QRC: $qrcText")
             }
 
             // 处理翻译 (trans) 和 罗马音 (roma)
             // 它们也是 Hex String，同样可以用 decryptQrc 解密
-            val transHex = data["trans"]?.jsonPrimitive?.content ?: ""
-            val romaHex = data["roma"]?.jsonPrimitive?.content ?: ""
+            val transHex = data.trans
+            val romaHex = data.roma
             
             var transText: String? = null
             var romaText: String? = null
