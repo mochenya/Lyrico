@@ -22,9 +22,9 @@ import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Retrofit
 import java.security.MessageDigest
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import kotlin.random.Random
 
@@ -53,6 +53,7 @@ class NeSource {
     private var isInitialized = false
     private var userId: Long = 0
 
+    private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
     // 模拟 PC 客户端常量
     private val APP_VER = "3.1.3.203419"
     private val OS_VER = "Microsoft-Windows-10--build-19045-64bit"
@@ -284,16 +285,12 @@ class NeSource {
 
         return Base64.encodeToString(combinedStr.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
     }
-
     private fun formatMillisToDate(millis: Long): String {
-        if (millis <= 0L){
-            return ""
-        }
-        return try {
-            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            sdf.format(Date(millis))
-        } catch (e: Exception) {
-            ""
-        }
+        if (millis <= 0L) return ""
+
+        return Instant.ofEpochMilli(millis)
+            .atZone(ZoneId.systemDefault())
+            .toLocalDate()
+            .format(formatter)
     }
 }

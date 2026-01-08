@@ -138,7 +138,8 @@ class KgSource {
         body: String = "",
         module: String = "Search"
     ): Map<String, String> {
-        val mid = KgCryptoUtils.md5(System.currentTimeMillis().toString())
+        val currentTime = System.currentTimeMillis()
+        val mid = KgCryptoUtils.md5(currentTime.toString())
         val baseParams = mutableMapOf<String, String>()
 
 
@@ -151,7 +152,7 @@ class KgSource {
             baseParams["userid"] = "0"
             baseParams["appid"] = APPID
             baseParams["token"] = ""
-            baseParams["clienttime"] = (System.currentTimeMillis() / 1000).toString()
+            baseParams["clienttime"] = (currentTime / 1000).toString()
             baseParams["iscorrection"] = "1"
             baseParams["uuid"] = "-"
             baseParams["mid"] = mid

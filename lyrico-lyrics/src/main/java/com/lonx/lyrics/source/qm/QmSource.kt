@@ -139,8 +139,6 @@ class QmSource {
             var qrcText = ""
 
             if (lyricHex.isNotEmpty()) {
-                // 解密 QRC
-                logLargeString("QRC", lyricHex)
                 qrcText = QmCryptoUtils.decryptQrc(lyricHex)
                 Log.d("QmSource", "Decrypt QRC: $qrcText")
             }
@@ -177,12 +175,5 @@ class QmSource {
             return@withContext null
         }
     }
-    fun logLargeString(tag: String, content: String) {
-        if (content.length > 4000) {
-            Log.d(tag, content.take(4000))
-            logLargeString(tag, content.substring(4000))
-        } else {
-            Log.d(tag, content)
-        }
-    }
+
 }
