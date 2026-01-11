@@ -11,6 +11,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioTagData
+import com.lonx.lyrico.data.model.LyricsSearchResult
 import com.lonx.lyrics.model.LyricsResult
 import com.lonx.lyrico.data.repository.SongRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,9 +71,10 @@ class EditMetadataViewModel(
         _uiState.update { it.copy(editingTagData = audioTagData) }
     }
 
-    fun updateMetadataFromSearchResult(result: com.lonx.lyrico.data.model.LyricsSearchResult) {
+    fun updateMetadataFromSearchResult(result: LyricsSearchResult) {
         _uiState.update { currentState ->
             val currentData = currentState.editingTagData ?: AudioTagData()
+
             currentState.copy(
                 editingTagData = currentData.copy(
                     title = result.title?.takeIf { it.isNotBlank() } ?: currentData.title,
@@ -80,18 +82,20 @@ class EditMetadataViewModel(
                     album = result.album?.takeIf { it.isNotBlank() } ?: currentData.album,
                     lyrics = result.lyrics?.takeIf { it.isNotBlank() } ?: currentData.lyrics,
                     date = result.date?.takeIf { it.isNotBlank() } ?: currentData.date,
-                    trackerNumber = result.trackerNumber?.takeIf { it.isNotBlank() } ?: currentData.trackerNumber
-                )
+                    trackerNumber = result.trackerNumber?.takeIf { it.isNotBlank() } ?: currentData.trackerNumber,
+                    picUrl = result.picUrl?.takeIf { it.isNotBlank() } ?: currentData.picUrl,
+                ),
+                coverUri = result.picUrl?.takeIf { it.isNotBlank() }?.toUri()
             )
         }
     }
+
 
 
     fun clearSaveStatus() {
         _uiState.update { it.copy(saveSuccess = null) }
     }
 
-    @RequiresApi(Build.VERSION_CODES.Q)
     fun onPermissionResult(granted: Boolean) {
         clearPermissionRequest()
         if (granted) {
@@ -107,7 +111,6 @@ class EditMetadataViewModel(
         _uiState.update { it.copy(permissionRequest = null) }
     }
 
-    @RequiresApi(Build.VERSION_CODES.Q)
     fun saveMetadata() {
         val songInfo = _uiState.value.songInfo ?: return
         val audioTagData = _uiState.value.editingTagData ?: return

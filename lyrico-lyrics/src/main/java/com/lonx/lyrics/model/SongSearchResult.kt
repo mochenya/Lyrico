@@ -17,5 +17,6 @@ data class SongSearchResult(
     val mid: String? = null,
     val date: String = "",
     val trackerNumber: String = "",
+    val picUrl: String = "",
 ) : Parcelable
 

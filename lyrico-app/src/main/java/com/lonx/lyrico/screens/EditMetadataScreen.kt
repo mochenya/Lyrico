@@ -23,19 +23,18 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.lonx.lyrico.ui.theme.*
 import com.lonx.lyrico.viewmodel.EditMetadataViewModel
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import android.app.Activity
-import android.os.Build
-import androidx.annotation.RequiresApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.core.net.toUri
+import coil3.compose.AsyncImage
+import coil3.toUri
 import com.lonx.lyrico.data.model.LyricsSearchResult
 import com.lonx.lyrico.ui.components.bar.TopBar
+import com.lonx.lyrico.utils.coil.CoverRequest
 import com.moriafly.salt.ui.SaltTheme
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
@@ -49,7 +48,6 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 
-@RequiresApi(Build.VERSION_CODES.Q)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 @Destination<RootGraph>(route = "edit_metadata")
@@ -191,13 +189,20 @@ fun EditMetadataScreen(
                     .verticalScroll(scrollState)
             ) {
                 AsyncImage(
-                    model = uiState.filePath?.toUri(),
+                    model = uiState.coverUri ?: uiState.filePath?.let { filePath ->
+                        val file = java.io.File(filePath)
+                        val lastModified = if (file.exists()) file.lastModified() else 0L
+                        CoverRequest(filePath.toUri(), lastModified)
+                    },
                     contentDescription = uiState.songInfo?.tagData?.title ?: "歌曲封面",
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f),
                     contentScale = ContentScale.Crop,
                     placeholder = rememberVectorPainter(Icons.Default.MusicNote),
                     error = rememberVectorPainter(Icons.Default.MusicNote)
                 )
+
 
                 Column(
                     modifier = Modifier.padding(12.dp),

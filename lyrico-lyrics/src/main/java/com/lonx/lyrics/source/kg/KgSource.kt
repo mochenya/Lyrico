@@ -122,7 +122,8 @@ class KgSource {
                     duration = (item.duration * 1000).toLong(),
                     source = Source.KG,
                     hash = item.fileHash,
-                    date = item.publishDate ?:""
+                    date = item.publishDate ?:"",
+                    picUrl = if (item.picUrl != "") item.picUrl.replace("{size}", "480") else "", // 酷狗默认480*480
                 )
             } ?: emptyList()
         } catch (e: Exception) {

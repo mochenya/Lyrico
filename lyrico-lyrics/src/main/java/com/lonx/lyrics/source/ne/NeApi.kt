@@ -60,7 +60,7 @@ data class NeSongData(
 data class NeArtist(val name: String)
 
 @Serializable
-data class NeAlbum(val name: String, val picUrl: String? = null)
+data class NeAlbum(val name: String, val picUrl: String = "")
 
 @Serializable
 data class NeLyricResponse(

@@ -79,7 +79,11 @@ class QmSource {
 
             return@withContext songs.map { item ->
                 val singerList = item.singer.map { it.name }
-
+                val picUrl = if (item.album.name.isNotEmpty()) {
+                    "https://y.gtimg.cn/music/photo_new/T002R800x800M000${item.album.mid}.jpg"
+                } else {
+                    ""
+                }
                 SongSearchResult(
                     id = item.id,
                     mid = item.mid,
@@ -89,6 +93,8 @@ class QmSource {
                     duration = item.interval * 1000L,
                     source = Source.QM,
                     date = item.timePublic ?: "",
+                    trackerNumber = item.trackerNumber,
+                    picUrl = picUrl
                 )
             }
 

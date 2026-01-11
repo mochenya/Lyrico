@@ -226,7 +226,8 @@ class NeSource {
                     source = Source.NE,
                     date = song.publishTime?.let { formatMillisToDate(it) } ?: "",
                     trackerNumber = song.trackerNumber,
-                    hash = song.id.toString()
+                    hash = song.id.toString(),
+                    picUrl = song.album.picUrl
                 )
             } ?: emptyList()
 

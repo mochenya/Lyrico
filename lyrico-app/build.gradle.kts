@@ -80,6 +80,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation(project(":lyrico-audiotag"))
     implementation(project(":lyrico-lyrics"))
+    // https://mvnrepository.com/artifact/io.coil-kt.coil3/coil
     implementation(libs.coil.compose)
-    implementation(libs.coil.video)
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
 }

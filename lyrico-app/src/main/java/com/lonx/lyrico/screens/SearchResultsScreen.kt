@@ -1,6 +1,5 @@
 package com.lonx.lyrico.screens
 
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,19 +15,31 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.ImageLoader
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.request.allowHardware
+import coil3.size.Size
 import com.lonx.lyrico.data.model.LyricsSearchResult
 import com.lonx.lyrico.ui.components.bar.SearchBar
+import com.lonx.lyrico.ui.theme.Gray200
 import com.lonx.lyrico.viewmodel.SearchViewModel
 import com.lonx.lyrics.model.SongSearchResult
 import com.moriafly.salt.ui.ItemDivider
 import com.moriafly.salt.ui.SaltTheme
+import com.moriafly.salt.ui.Text
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.result.ResultBackNavigator
@@ -189,10 +200,11 @@ fun SearchResultsScreen(
                             items(uiState.searchResults) { result ->
                                 SearchResultItem(
                                     song = result,
-                                    onPreviewClick = { viewModel.fetchLyricsForPreview(result) },
+                                    onPreviewClick = {
+                                        viewModel.fetchLyricsForPreview(result)
+                                    },
                                     onApplyClick = {
                                         viewModel.fetchLyricsDirectly(result) { lyrics ->
-                                            Log.d("Lyrics", "Lyrics: $lyrics")
                                             if (lyrics != null) {
                                                 resultNavigator.navigateBack(
                                                     LyricsSearchResult(
@@ -201,14 +213,15 @@ fun SearchResultsScreen(
                                                         album = result.album,
                                                         lyrics = lyrics,
                                                         date = result.date,
-                                                        trackerNumber = result.trackerNumber
-
-                                                        )
+                                                        trackerNumber = result.trackerNumber,
+                                                        picUrl = result.picUrl
+                                                    )
                                                 )
                                             }
                                         }
                                     }
                                 )
+
                             }
                         }
                     }
@@ -288,7 +301,8 @@ fun SearchResultsScreen(
                                     album = song.album,
                                     lyrics = lyrics,
                                     date = song.date,
-                                    trackerNumber = song.trackerNumber
+                                    trackerNumber = song.trackerNumber,
+                                    picUrl = song.picUrl
                                 )
                             )
                         }
@@ -314,89 +328,155 @@ fun SearchResultItem(
     onPreviewClick: () -> Unit,
     onApplyClick: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    val context = LocalContext.current
+
+    // 原图尺寸（metadata）
+    var imageSize by remember(song.picUrl) {
+        mutableStateOf<Pair<Int, Int>?>(null)
+    }
+
+    /**
+     * 只读取图片头信息，不参与 UI，不解码大图
+     */
+    LaunchedEffect(song.picUrl) {
+        if (song.picUrl.isNotBlank()) {
+            val imageLoader = ImageLoader(context)
+
+            val request = ImageRequest.Builder(context)
+                .data(song.picUrl)
+                .size(Size.ORIGINAL)        // 读取原始尺寸
+                .allowHardware(false)       // 确保可读取尺寸
+                .build()
+
+            val result = imageLoader.execute(request)
+
+            if (result is SuccessResult) {
+                val image = result.image
+                val w = image.width
+                val h = image.height
+
+                if (w > 0 && h > 0) {
+                    imageSize = w to h
+                }
+            }
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.Top
         ) {
+
+            /* 左侧：封面 + 原图尺寸 */
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+
+                Box(
+                    modifier = Modifier
+                        .size(76.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Gray200)
+                ) {
+                    AsyncImage(
+                        model = song.picUrl,
+                        contentDescription = song.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        placeholder = rememberVectorPainter(Icons.Default.MusicNote),
+                        error = rememberVectorPainter(Icons.Default.MusicNote)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                imageSize?.let { (w, h) ->
+                    Text(
+                        text = "${w}×${h}",
+                        fontSize = 11.sp,
+                        color = SaltTheme.colors.subText
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            /* 中间：歌曲信息 */
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = song.title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
-                    color = SaltTheme.colors.text, // 使用 SaltTheme
+                    color = SaltTheme.colors.text,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+
                 Text(
                     text = song.artist,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                    color = SaltTheme.colors.subText, // 使用 SaltTheme
+                    fontSize = 13.sp,
+                    color = SaltTheme.colors.subText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
                 if (song.album.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = song.album,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                        fontSize = 13.sp,
                         color = SaltTheme.colors.subText,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                if (song.date.isNotBlank()){
-                    Spacer(modifier = Modifier.height(2.dp))
+
+                if (song.date.isNotBlank()) {
                     Text(
                         text = song.date,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                        color = SaltTheme.colors.subText, // 使用 SaltTheme
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        fontSize = 12.sp,
+                        color = SaltTheme.colors.subText
                     )
                 }
-                if (song.trackerNumber.isNotBlank()){
-                    Spacer(modifier = Modifier.height(2.dp))
+
+                if (song.trackerNumber.isNotBlank()) {
                     Text(
                         text = "Track ${song.trackerNumber}",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                        color = SaltTheme.colors.subText, // 使用 SaltTheme
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        fontSize = 12.sp,
+                        color = SaltTheme.colors.subText
                     )
                 }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
+            /* 右侧：操作 */
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+
                 TextButton(
                     onClick = onPreviewClick,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                    modifier = Modifier.height(36.dp),
+                    modifier = Modifier.height(34.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("预览", fontSize = 13.sp, color = SaltTheme.colors.highlight)
+                    Text(
+                        text = "预览",
+                        fontSize = 13.sp,
+                        color = SaltTheme.colors.highlight
+                    )
                 }
 
                 Button(
                     onClick = onApplyClick,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    modifier = Modifier.height(36.dp),
+                    modifier = Modifier.height(34.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = SaltTheme.colors.highlight.copy(alpha = 0.1f),
+                        containerColor = SaltTheme.colors.highlight.copy(alpha = 0.12f),
                         contentColor = SaltTheme.colors.highlight
                     ),
                     elevation = ButtonDefaults.buttonElevation(0.dp)

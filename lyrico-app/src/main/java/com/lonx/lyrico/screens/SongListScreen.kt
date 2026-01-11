@@ -27,12 +27,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
+import coil3.toUri
 import com.lonx.lyrico.data.model.SongEntity
 import com.lonx.lyrico.ui.components.bar.TopBar
 import com.lonx.lyrico.ui.theme.Gray200
 import com.lonx.lyrico.ui.theme.Gray400
+import com.lonx.lyrico.utils.coil.CoverRequest
 import com.lonx.lyrico.viewmodel.SongListViewModel
 import com.lonx.lyrico.viewmodel.SortBy
 import com.lonx.lyrico.viewmodel.SortInfo
@@ -253,7 +254,7 @@ fun SongListItem(
                     .background(Gray200)
             ) {
                 AsyncImage(
-                    model = song.filePath.toUri(),
+                    model = CoverRequest(song.filePath.toUri(), song.fileLastModified),
                     contentDescription = song.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
@@ -357,42 +358,3 @@ fun SongListItem(
     }
 }
 
-@Composable
-private fun SortMenu(
-    expanded: Boolean,
-    currentSortInfo: SortInfo,
-    onDismissRequest: () -> Unit,
-    onSortSelected: (SortInfo) -> Unit
-) {
-    DropdownMenu(
-        expanded = expanded,
-        onDismissRequest = onDismissRequest
-    ) {
-        val sorts = listOf(
-            SortInfo(SortBy.TITLE, SortOrder.ASC),
-            SortInfo(SortBy.TITLE, SortOrder.DESC),
-            SortInfo(SortBy.DATE_MODIFIED, SortOrder.ASC),
-            SortInfo(SortBy.DATE_MODIFIED, SortOrder.DESC),
-            SortInfo(SortBy.ARTIST, SortOrder.ASC),
-            SortInfo(SortBy.ARTIST, SortOrder.DESC)
-        )
-
-        sorts.forEach { sortInfo ->
-            val text = when (sortInfo.sortBy) {
-                SortBy.TITLE -> "歌曲名"
-                SortBy.DATE_MODIFIED -> "修改时间"
-                SortBy.ARTIST -> "歌手"
-            } + if (sortInfo.order == SortOrder.ASC) " (升序)" else " (降序)"
-
-            DropdownMenuItem(
-                text = { Text(text) },
-                onClick = { onSortSelected(sortInfo) },
-                trailingIcon = {
-                    if (currentSortInfo == sortInfo) {
-                        Icon(Icons.Default.Check, contentDescription = "Selected")
-                    }
-                }
-            )
-        }
-    }
-}

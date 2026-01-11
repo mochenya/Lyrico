@@ -5,8 +5,10 @@ import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
+import com.lonx.audiotag.model.AudioPicture
 import com.lonx.audiotag.model.AudioTagData
 import com.lonx.audiotag.rw.AudioTagReader
+import com.lonx.audiotag.rw.AudioTagWriter
 import com.lonx.lyrico.data.LyricoDatabase
 import com.lonx.lyrico.data.model.SongEntity
 import com.lonx.lyrico.data.model.SongFile
@@ -18,6 +20,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * 歌曲数据存储库 - 处理数据库和文件系统交互
@@ -171,7 +175,6 @@ class SongRepository(
         }
 
 
-    @RequiresApi(Build.VERSION_CODES.Q)
     suspend fun writeAudioTagData(filePath: String, audioTagData: AudioTagData): Boolean {
         return try {
             (if (isUriPath(filePath)) {
@@ -187,16 +190,22 @@ class SongRepository(
                 audioTagData.date?.let { updates["DATE"] = it }
                 audioTagData.trackerNumber?.let { updates["TRACKNUMBER"] = it }
 
-                com.lonx.audiotag.rw.AudioTagWriter.writeTags(pfdDescriptor, updates)
+                AudioTagWriter.writeTags(pfdDescriptor, updates)
 
                 audioTagData.lyrics?.let { lyricsString ->
-                    com.lonx.audiotag.rw.AudioTagWriter.writeLyrics(pfdDescriptor, lyricsString)
+                    AudioTagWriter.writeLyrics(pfdDescriptor, lyricsString)
+                }
+                audioTagData.picUrl?.let { picUrl ->
+                    Log.d(TAG, "写入图片: $picUrl")
+                    val imageBytes = downloadImageBytes(picUrl)
+                    val pictures = AudioPicture(
+                        data = imageBytes
+                        )
+                    AudioTagWriter.writePictures(pfdDescriptor, listOf(pictures))
                 }
 
                 true
             } ?: false
-        } catch (e: android.app.RecoverableSecurityException) {
-            throw e
         } catch (e: Exception) {
             Log.e(TAG, "写入文件失败", e)
             false
@@ -237,5 +246,13 @@ class SongRepository(
             false
         }
     }
+    private suspend fun downloadImageBytes(url: String): ByteArray =
+        withContext(Dispatchers.IO) {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            connection.connectTimeout = 8000
+            connection.readTimeout = 8000
+            connection.inputStream.use { it.readBytes() }
+        }
+
 }
 

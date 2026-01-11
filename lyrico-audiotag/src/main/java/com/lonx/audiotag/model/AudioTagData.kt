@@ -20,7 +20,8 @@ data class AudioTagData(
 
     val rawProperties: Map<String, Array<String>>? = null,
 
-    val pictures: List<AudioPicture> = ArrayList()
+    val pictures: List<AudioPicture> = ArrayList(),
+    val picUrl: String? = null
 ): Parcelable
 
 @Parcelize
