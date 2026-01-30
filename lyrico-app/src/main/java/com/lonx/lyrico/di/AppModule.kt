@@ -1,5 +1,7 @@
 package com.lonx.lyrico.di
 
+import androidx.room.Room
+import androidx.room.RoomDatabase
 import com.lonx.lyrico.utils.MusicScanner
 import com.lonx.lyrico.utils.SettingsManager
 import com.lonx.lyrico.viewmodel.EditMetadataViewModel
@@ -27,7 +29,14 @@ val appModule = module {
     single { MusicScanner(androidContext()) }
     
     // 数据库和存储库
-    single { LyricoDatabase.getInstance(androidContext()) }
+    single {
+        Room.databaseBuilder(
+            androidContext(),
+            LyricoDatabase::class.java,
+            "lyrico_database"
+        ).build()
+    }
+
     single { SongRepository(get(), androidContext(), get(), get()) }
     
     // ViewModels
