@@ -126,19 +126,26 @@ fun SongListScreen(
                 SelectionModeTopAppBar(
                     selectedCount = selectedPaths.size,
                     actions = {
-                        TextButton(onClick = {
-                            viewModel.selectAll(songs)
-                        }){
+                        TextButton(
+                            onClick = {
+                                viewModel.selectAll(songs)
+                            }
+                        ) {
                             Text(text = "全选", color = SaltTheme.colors.highlight)
                         }
-                        TextButton(onClick= {
+                        TextButton(
+                            enabled = selectedPaths.isNotEmpty(),
+                            onClick= {
                             // TODO: 匹配标签
-                        }) {
-                            Text(text = "匹配标签", color = SaltTheme.colors.highlight)
+                            }
+                        ) {
+                            Text(text = "匹配标签", color = if (selectedPaths.isNotEmpty()) SaltTheme.colors.highlight else SaltTheme.colors.subText)
                         }
-                        TextButton(onClick = {
-                            viewModel.exitSelectionMode()
-                        }) {
+                        TextButton(
+                            onClick = {
+                                viewModel.exitSelectionMode()
+                            }
+                        ) {
                             Text(text = "取消", color = SaltTheme.colors.highlight)
                         }
                     }
@@ -617,7 +624,9 @@ fun SongListItem(
             }
             trailingContent?.let {
                 Box(
-                    contentAlignment = Alignment.Center
+                    modifier = Modifier
+                        .size(36.dp),
+                    contentAlignment = Alignment.CenterEnd
                 ) {
                     trailingContent()
                 }
