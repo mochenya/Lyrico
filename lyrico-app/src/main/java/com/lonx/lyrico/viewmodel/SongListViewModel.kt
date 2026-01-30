@@ -21,9 +21,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -61,7 +61,12 @@ class SongListViewModel(
     private val contentResolver = application.contentResolver
     private var musicContentObserver: MusicContentObserver? = null
     private val scanRequest = MutableSharedFlow<Unit>(replay = 0)
+    // 存储被选中的歌曲 ID (filePath 是唯一的 key)
+    private val _selectedSongPaths = MutableStateFlow<Set<String>>(emptySet())
+    val selectedSongPaths = _selectedSongPaths.asStateFlow()
 
+    private val _isSelectionMode = MutableStateFlow(false)
+    val isSelectionMode = _isSelectionMode.asStateFlow()
     @OptIn(ExperimentalCoroutinesApi::class)
     val songs: StateFlow<List<SongEntity>> =
         sortInfo.flatMapLatest { sort ->
@@ -97,6 +102,36 @@ class SongListViewModel(
                     triggerSync(isAuto = true)
                 }
         }
+    }
+    fun enterSelectionMode(firstPath: String? = null) {
+        _isSelectionMode.value = true
+        firstPath?.let {
+            _selectedSongPaths.value = setOf(it)
+        }
+    }
+    fun toggleSelection(path: String) {
+        // 如果还没进入多选模式，点击时自动进入
+        if (!_isSelectionMode.value) {
+            _isSelectionMode.value = true
+        }
+
+        val current = _selectedSongPaths.value
+        if (current.contains(path)) {
+            _selectedSongPaths.value = current - path
+        } else {
+            _selectedSongPaths.value = current + path
+        }
+    }
+
+    // 全选
+    fun selectAll(songs: List<SongEntity>) {
+        _selectedSongPaths.value = songs.map { it.filePath }.toSet()
+    }
+
+    // 退出多选模式
+    fun exitSelectionMode() {
+        _isSelectionMode.value = false      // 显式关闭模式
+        _selectedSongPaths.value = emptySet() // 清空选择
     }
     fun selectedSong(song: SongEntity) {
         _uiState.update { it.copy(selectedSongs = song) }

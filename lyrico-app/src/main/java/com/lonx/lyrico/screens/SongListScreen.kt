@@ -2,8 +2,9 @@ package com.lonx.lyrico.screens
 
 import android.annotation.SuppressLint
 import android.view.HapticFeedbackConstants
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
@@ -49,6 +50,9 @@ import com.moriafly.salt.ui.ItemDivider
 import com.moriafly.salt.ui.SaltTheme
 import com.moriafly.salt.ui.Text
 import com.moriafly.salt.ui.UnstableSaltUiApi
+import com.moriafly.salt.ui.icons.Check
+import com.moriafly.salt.ui.icons.SaltIcons
+import com.moriafly.salt.ui.icons.Uncheck
 import com.moriafly.salt.ui.noRippleClickable
 import com.moriafly.salt.ui.popup.PopupMenu
 import com.moriafly.salt.ui.popup.PopupMenuItem
@@ -82,6 +86,8 @@ fun SongListScreen(
     val uiState by viewModel.uiState.collectAsState()
     val sortInfo by viewModel.sortInfo.collectAsState()
     val songs by viewModel.songs.collectAsState()
+    val isSelectionMode by viewModel.isSelectionMode.collectAsState(initial = false)
+    val selectedPaths by viewModel.selectedSongPaths.collectAsState()
     var sortOrderDropdownExpanded by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -108,102 +114,130 @@ fun SongListScreen(
         }
     }
 
-
+    BackHandler(enabled = isSelectionMode) {
+        viewModel.exitSelectionMode()
+    }
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
             .background(SaltTheme.colors.background),
         topBar = {
-            CenterAlignedTopAppBar(
-                colors = TopAppBarColors(
-                    containerColor = SaltTheme.colors.background,
-                    scrolledContainerColor = SaltTheme.colors.background,
-                    navigationIconContentColor = SaltTheme.colors.text,
-                    titleContentColor = SaltTheme.colors.text,
-                    actionIconContentColor = SaltTheme.colors.text,
-                    subtitleContentColor = SaltTheme.colors.subText
-                ),
-                title = {
-                    Text(
-                        text = "歌曲(${songs.size}首)",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_settings_24dp),
-                        contentDescription = "Settings",
-                        tint = SaltTheme.colors.text,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .noRippleClickable(role = Role.Button) {
-                                navigator.navigate(SettingsDestination())
-                            }
-                            .padding(12.dp)
-                    )
-                },
-                actions = {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_search_24dp),
-                        contentDescription = "Search",
-                        tint = SaltTheme.colors.text,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .noRippleClickable(role = Role.Button) {
-                                navigator.navigate(LocalSearchDestination())
-                            }
-                            .padding(12.dp)
-                    )
-                    Box(modifier = Modifier.wrapContentSize()) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_sort_24dp),
-                            contentDescription = "Sort",
-                            tint = SaltTheme.colors.text,
-                            modifier = Modifier
-                                .size(36.dp)
-                                .noRippleClickable(role = Role.Button) {
-                                    sortOrderDropdownExpanded = true
-                                }
-                                .padding(8.dp)
-                        )
-
-                        PopupMenu(
-                            expanded = sortOrderDropdownExpanded,
-                            onDismissRequest = { sortOrderDropdownExpanded = false }
-                        ) {
-                            val sortTypes = listOf(
-                                SortBy.TITLE, SortBy.ARTIST, SortBy.DATE_MODIFIED, SortBy.DATE_ADDED
-                            )
-
-                            sortTypes.forEach { type ->
-                                val isSelected = sortInfo.sortBy == type
-                                PopupMenuItem(
-                                    text = type.displayName,
-                                    selected = isSelected,
-                                    iconPainter = if (isSelected) {
-                                        if (sortInfo.order == SortOrder.ASC) {
-                                            painterResource(R.drawable.ic_arrow_down_24dp)
-                                        } else {
-                                            painterResource(R.drawable.ic_arrow_up_24dp)
-                                        }
-                                    } else null,
-                                    iconPaddingValues = PaddingValues(2.dp),
-                                    onClick = {
-                                        val newOrder = if (isSelected) {
-                                            if (sortInfo.order == SortOrder.ASC) SortOrder.DESC else SortOrder.ASC
-                                        } else {
-                                            SortOrder.ASC
-                                        }
-                                        viewModel.onSortChange(SortInfo(type, newOrder))
-                                    }
-                                )
-                            }
+            if (isSelectionMode) {
+                SelectionModeTopAppBar(
+                    selectedCount = selectedPaths.size,
+                    actions = {
+                        TextButton(onClick = {
+                            viewModel.selectAll(songs)
+                        }){
+                            Text(text = "全选", color = SaltTheme.colors.highlight)
+                        }
+                        TextButton(onClick= {
+                            // TODO: 匹配标签
+                        }) {
+                            Text(text = "匹配标签", color = SaltTheme.colors.highlight)
+                        }
+                        TextButton(onClick = {
+                            viewModel.exitSelectionMode()
+                        }) {
+                            Text(text = "取消", color = SaltTheme.colors.highlight)
                         }
                     }
-                },
-            )
+                )
+            } else {
+                CenterAlignedTopAppBar(
+                    colors = TopAppBarColors(
+                        containerColor = SaltTheme.colors.background,
+                        scrolledContainerColor = SaltTheme.colors.background,
+                        navigationIconContentColor = SaltTheme.colors.text,
+                        titleContentColor = SaltTheme.colors.text,
+                        actionIconContentColor = SaltTheme.colors.text,
+                        subtitleContentColor = SaltTheme.colors.subText
+                    ),
+                    title = {
+                        Text(
+                            text = "歌曲(${songs.size}首)",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    navigationIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_settings_24dp),
+                            contentDescription = "Settings",
+                            tint = SaltTheme.colors.text,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .noRippleClickable(role = Role.Button) {
+                                    navigator.navigate(SettingsDestination())
+                                }
+                                .padding(12.dp)
+                        )
+                    },
+                    actions = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_search_24dp),
+                            contentDescription = "Search",
+                            tint = SaltTheme.colors.text,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .noRippleClickable(role = Role.Button) {
+                                    navigator.navigate(LocalSearchDestination())
+                                }
+                                .padding(12.dp)
+                        )
+                        Box(modifier = Modifier.wrapContentSize()) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_sort_24dp),
+                                contentDescription = "Sort",
+                                tint = SaltTheme.colors.text,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .noRippleClickable(role = Role.Button) {
+                                        sortOrderDropdownExpanded = true
+                                    }
+                                    .padding(8.dp)
+                            )
+
+                            PopupMenu(
+                                expanded = sortOrderDropdownExpanded,
+                                onDismissRequest = { sortOrderDropdownExpanded = false }
+                            ) {
+                                val sortTypes = listOf(
+                                    SortBy.TITLE,
+                                    SortBy.ARTIST,
+                                    SortBy.DATE_MODIFIED,
+                                    SortBy.DATE_ADDED
+                                )
+
+                                sortTypes.forEach { type ->
+                                    val isSelected = sortInfo.sortBy == type
+                                    PopupMenuItem(
+                                        text = type.displayName,
+                                        selected = isSelected,
+                                        iconPainter = if (isSelected) {
+                                            if (sortInfo.order == SortOrder.ASC) {
+                                                painterResource(R.drawable.ic_arrow_down_24dp)
+                                            } else {
+                                                painterResource(R.drawable.ic_arrow_up_24dp)
+                                            }
+                                        } else null,
+                                        iconPaddingValues = PaddingValues(2.dp),
+                                        onClick = {
+                                            val newOrder = if (isSelected) {
+                                                if (sortInfo.order == SortOrder.ASC) SortOrder.DESC else SortOrder.ASC
+                                            } else {
+                                                SortOrder.ASC
+                                            }
+                                            viewModel.onSortChange(SortInfo(type, newOrder))
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    },
+                )
+            }
 
         }
     ) { paddingValues ->
@@ -240,17 +274,22 @@ fun SongListScreen(
                             song = song,
                             navigator = navigator,
                             modifier = Modifier.animateItem(),
+                            isSelectionMode = isSelectionMode,
+                            isSelected = selectedPaths.contains(song.filePath),
+                            onToggleSelection = { viewModel.toggleSelection(song.filePath) },
                             trailingContent = {
-                                IconButton(
-                                    modifier = Modifier.size(24.dp),
-                                    onClick = {
-                                        viewModel.selectedSong(song)
+                                if (!isSelectionMode) {
+                                    IconButton(onClick = { viewModel.selectedSong(song) }) {
+                                        Icon(painterResource(R.drawable.ic_info_24dp), "Info")
                                     }
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_info_24dp),
-                                        contentDescription = "Info"
-                                    )
+                                } else {
+                                    IconButton(onClick = { viewModel.toggleSelection(song.filePath) }) {
+                                        Icon(
+                                            imageVector = if (selectedPaths.contains(song.filePath)) SaltIcons.Check else SaltIcons.Uncheck,
+                                            contentDescription = null,
+                                            tint = if (selectedPaths.contains(song.filePath)) SaltTheme.colors.highlight else SaltTheme.colors.text
+                                        )
+                                    }
                                 }
                             }
                         )
@@ -433,18 +472,32 @@ fun SongListItem(
     song: SongEntity,
     navigator: DestinationsNavigator,
     modifier: Modifier = Modifier,
-    trailingContent: (@Composable () -> Unit)? = null
+    trailingContent: (@Composable () -> Unit)? = null,
+    isSelectionMode: Boolean ? = null,
+    isSelected: Boolean? = null,
+    onToggleSelection: (() -> Unit )? = null,
 ) {
+    val backgroundColor = if (isSelected == true) SaltTheme.colors.highlight.copy(alpha = 0.1f) else SaltTheme.colors.background
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = {
-                navigator.navigate(
-                    EditMetadataDestination(
-                        songFilePath = song.filePath
-                    )
-                )
-            })
+            .background(backgroundColor)
+            .combinedClickable(
+                onClick = {
+                    if (isSelectionMode == true) {
+                        onToggleSelection?.let { it() }
+                    } else {
+                        navigator.navigate(EditMetadataDestination(songFilePath = song.filePath))
+                    }
+                },
+                onLongClick = {
+                    isSelectionMode?.let {
+                        if (!it) {
+                            onToggleSelection?.let { it1 -> it1() }
+                        }
+                    }
+                }
+            )
             .padding(vertical = 8.dp)
     ) {
 
@@ -678,4 +731,28 @@ fun SongDetailItem(label: String, value: String?) {
             modifier = Modifier.padding(top = 2.dp)
         )
     }
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SelectionModeTopAppBar(
+    selectedCount: Int,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
+    TopAppBar(
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = SaltTheme.colors.background
+        ),
+
+        title = {
+            Text(
+                text = "已选择 $selectedCount 项",
+                style = SaltTheme.textStyles.main,
+                color = SaltTheme.colors.text,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        actions = {
+            actions()
+        }
+    )
 }
