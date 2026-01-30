@@ -1,7 +1,6 @@
 package com.lonx.lyrico.di
 
 import androidx.room.Room
-import androidx.room.RoomDatabase
 import com.lonx.lyrico.utils.MusicScanner
 import com.lonx.lyrico.utils.SettingsManager
 import com.lonx.lyrico.viewmodel.EditMetadataViewModel
@@ -17,13 +16,16 @@ import com.lonx.lyrics.source.ne.NeSource
 import com.lonx.lyrics.source.qm.QmSource
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 val appModule = module {
     // 歌词源
-    single<SearchSource> { KgSource() }
-    single<SearchSource> { QmSource() }
-    single<SearchSource> { NeSource() }
+    single<SearchSource>(named("Kg")) { KgSource() }
+    single<SearchSource>(named("Qm")) { QmSource() }
+    single<SearchSource>(named("Ne")) { NeSource() }
+
+    // getAll 会自动收集所有声明为 SearchSource 类型的实例（哪怕它们有不同的名称）
     single { getAll<SearchSource>() }
     // 工具类
     single { SettingsManager(get()) }
