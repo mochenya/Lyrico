@@ -117,7 +117,12 @@ class EditMetadataViewModel(
         }
     }
     fun revertCover() {
-        _uiState.update { it.copy(coverUri = it.originalCover) }
+        _uiState.update {
+            it.copy(
+                coverUri = it.originalCover,
+                editingTagData = it.editingTagData?.copy(picUrl = null)
+            )
+        }
     }
 
 
