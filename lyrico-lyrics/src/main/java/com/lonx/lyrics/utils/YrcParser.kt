@@ -128,23 +128,13 @@ object YrcParser {
 
                 val words = mutableListOf<LyricsWord>()
                 val wordMatcher = YRC_WORD_PATTERN.matcher(content)
-                val wordList = mutableListOf<Pair<Long, String>>()
                 while (wordMatcher.find()) {
                     val wordStart = wordMatcher.group(1)?.toLongOrNull() ?: 0L
+                    val wordDuration = wordMatcher.group(2)?.toLongOrNull() ?: 0L
                     val wordText = wordMatcher.group(3) ?: ""
-                    wordList.add(wordStart to wordText)
+                    words.add(LyricsWord(start = wordStart, end = wordStart + wordDuration, text = wordText))
                 }
 
-                for (i in wordList.indices) {
-                    val (wordStartOffset, wordText) = wordList[i]
-                    val absWordStart = lineStart + wordStartOffset
-                    val wordEnd = if (i < wordList.size - 1) {
-                        lineStart + wordList[i + 1].first
-                    } else {
-                        lineEnd
-                    }
-                    words.add(LyricsWord(start = absWordStart, end = wordEnd, text = wordText))
-                }
                 if (words.isEmpty() && content.isNotEmpty()) {
                     words.add(LyricsWord(start = lineStart, end = lineEnd, text = content))
                 }
