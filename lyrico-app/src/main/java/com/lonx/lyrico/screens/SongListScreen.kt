@@ -484,6 +484,7 @@ fun SongListItem(
     isSelected: Boolean? = null,
     onToggleSelection: (() -> Unit )? = null,
 ) {
+    val view = LocalView.current
     val backgroundColor = if (isSelected == true) SaltTheme.colors.highlight.copy(alpha = 0.1f) else SaltTheme.colors.background
     Column(
         modifier = modifier
@@ -500,6 +501,7 @@ fun SongListItem(
                 onLongClick = {
                     isSelectionMode?.let {
                         if (!it) {
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                             onToggleSelection?.let { it1 -> it1() }
                         }
                     }
