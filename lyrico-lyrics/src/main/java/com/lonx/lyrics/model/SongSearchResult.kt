@@ -3,7 +3,11 @@ package com.lonx.lyrics.model
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
-enum class Source { KG, QM, NE, LRCLIB }
+enum class Source(val sourceName: String) {
+    KG("酷狗音乐"),
+    QM("QQ音乐"),
+    NE("网易云音乐")
+}
 
 @Parcelize
 data class SongSearchResult(
