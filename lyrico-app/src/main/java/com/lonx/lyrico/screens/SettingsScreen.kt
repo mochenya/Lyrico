@@ -37,6 +37,7 @@ import com.moriafly.salt.ui.verticalScroll
 import com.ramcosta.composedestinations.annotation.Destination
 import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.FolderManagerDestination
+import com.ramcosta.composedestinations.generated.destinations.SearchSourcePriorityDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
 
@@ -58,6 +59,7 @@ fun SettingsScreen(
     val folders = uiState.folders
     val totalFolders = folders.size
     val ignoredFolders = folders.count { it.isIgnored }
+    val searchSourceOrder = uiState.searchSourceOrder
 
     Scaffold(
         modifier = Modifier
@@ -107,6 +109,16 @@ fun SettingsScreen(
                     } else "管理扫描路径"
                 )
             }
+
+            ItemOuterTitle("搜索源")
+            RoundedColumn {
+                Item(
+                    onClick = { navigator.navigate(SearchSourcePriorityDestination()) },
+                    text = "搜索源优先级",
+                    sub = searchSourceOrder.joinToString(" > ") { it.sourceName }
+                )
+            }
+
             ItemOuterTitle("歌词")
             RoundedColumn {
                 ItemDropdown(

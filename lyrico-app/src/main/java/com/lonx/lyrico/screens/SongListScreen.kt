@@ -45,11 +45,14 @@ import com.lonx.lyrico.viewmodel.SongListViewModel
 import com.lonx.lyrico.viewmodel.SortBy
 import com.lonx.lyrico.viewmodel.SortInfo
 import com.lonx.lyrico.viewmodel.SortOrder
+import com.moriafly.salt.ui.Button
+import com.moriafly.salt.ui.ButtonType
 import com.moriafly.salt.ui.Icon
 import com.moriafly.salt.ui.ItemDivider
 import com.moriafly.salt.ui.SaltTheme
 import com.moriafly.salt.ui.Text
 import com.moriafly.salt.ui.UnstableSaltUiApi
+import com.moriafly.salt.ui.dialog.BasicDialog
 import com.moriafly.salt.ui.icons.Check
 import com.moriafly.salt.ui.icons.SaltIcons
 import com.moriafly.salt.ui.icons.Uncheck
@@ -337,7 +340,91 @@ fun SongListScreen(
                 SongDetailBottomSheetContent(selectedSongs)
             }
         }
+        
+        // 批量匹配对话框
+        if (uiState.isBatchMatching || uiState.batchProgress != null) {
+            BatchMatchingDialog(
+                currentFile = uiState.currentFile,
+                progress = uiState.batchProgress,
+                successCount = uiState.successCount,
+                failureCount = uiState.failureCount,
+                isMatching = uiState.isBatchMatching,
+                loadingMessage = uiState.loadingMessage,
+                onAbort = { viewModel.abortBatchMatch() },
+                onClose = { viewModel.closeBatchMatchDialog() }
+            )
+        }
     }
+}
+
+@Composable
+fun BatchMatchingDialog(
+    currentFile: String,
+    progress: Pair<Int, Int>?,
+    successCount: Int,
+    failureCount: Int,
+    isMatching: Boolean,
+    loadingMessage: String,
+    onAbort: () -> Unit,
+    onClose: () -> Unit
+) {
+    BasicDialog(
+        onDismissRequest = { if (!isMatching) onClose() },
+        properties = androidx.compose.ui.window.DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false
+        ),
+        content = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 标题或加载信息
+                Text(
+                    text = if (isMatching) "批量匹配中" else loadingMessage,
+                    style = SaltTheme.textStyles.main
+                )
+
+                // 进度信息
+                progress?.let { (current, total) ->
+                    Text(
+                        text = "进度: $current / $total",
+                        style = SaltTheme.textStyles.main
+                    )
+                }
+
+                // 当前文件
+                if (currentFile.isNotEmpty()) {
+                    Text(
+                        text = "正在匹配: $currentFile",
+                        style = SaltTheme.textStyles.main
+                    )
+                }
+
+                // 成功/失败计数
+                Text(
+                    text = "成功: $successCount",
+                    style = SaltTheme.textStyles.main
+                )
+                Text(
+                    text = "失败: $failureCount",
+                    style = SaltTheme.textStyles.main
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 操作按钮
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = if (isMatching) onAbort else onClose,
+                    text = if (isMatching) "中止" else "关闭",
+                    type = if (isMatching) ButtonType.Sub else ButtonType.Highlight
+                )
+            }
+        }
+    )
 }
 
 fun findScrollIndex(

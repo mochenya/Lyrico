@@ -10,6 +10,7 @@ import com.lonx.lyrico.data.model.LyricDisplayMode
 import com.lonx.lyrico.viewmodel.SortBy
 import com.lonx.lyrico.viewmodel.SortInfo
 import com.lonx.lyrico.viewmodel.SortOrder
+import com.lonx.lyrics.model.Source
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -26,7 +27,11 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         val SORT_ORDER = stringPreferencesKey("sort_order")
         val SEPARATOR = stringPreferencesKey("separator")
         val ROMA_ENABLED = booleanPreferencesKey("roma_enabled")
+        val SEARCH_SOURCE_ORDER = stringPreferencesKey("search_source_order")
     }
+
+    // 默认搜索源顺序
+    private val defaultSourceOrder = listOf(Source.QM, Source.KG, Source.NE)
 
     override val lyricDisplayMode: Flow<LyricDisplayMode>
         get() = context.settingsDataStore.data.map { preferences ->
@@ -56,6 +61,26 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
     override val romaEnabled: Flow<Boolean>
         get() = context.settingsDataStore.data.map { preferences ->
             preferences[PreferencesKeys.ROMA_ENABLED] ?: true
+        }
+
+    override val searchSourceOrder: Flow<List<Source>>
+        get() = context.settingsDataStore.data.map { preferences ->
+            val orderString = preferences[PreferencesKeys.SEARCH_SOURCE_ORDER]
+            if (orderString.isNullOrBlank()) {
+                defaultSourceOrder
+            } else {
+                try {
+                    orderString.split(",").mapNotNull { name ->
+                        try {
+                            Source.valueOf(name.trim())
+                        } catch (e: IllegalArgumentException) {
+                            null
+                        }
+                    }.ifEmpty { defaultSourceOrder }
+                } catch (e: Exception) {
+                    defaultSourceOrder
+                }
+            }
         }
 
     override suspend fun getLastScanTime(): Long {
@@ -94,4 +119,11 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
             preferences[PreferencesKeys.LAST_SCAN_TIME] = time
         }
     }
+
+    override suspend fun saveSearchSourceOrder(sources: List<Source>) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PreferencesKeys.SEARCH_SOURCE_ORDER] = sources.joinToString(",") { it.name }
+        }
+    }
 }
+

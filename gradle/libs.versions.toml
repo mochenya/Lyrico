@@ -16,6 +16,7 @@ composeBom = "2026.01.01"
 kotlinxCoroutinesAndroid = "1.10.2"
 kotlinxSerializationJson = "1.10.0"
 okhttp = "5.3.2"
+reorderable = "3.0.0"
 retrofit = "3.0.0"
 retrofit2KotlinxSerializationConverter = "1.0.0"
 saltui = "2.9.0-alpha05"
@@ -44,6 +45,7 @@ androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "u
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 compose-destinations-ksp = { module = "io.github.raamcosta.compose-destinations:ksp", version.ref = "core" }
+reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
 salt-ui-android = { module = "io.github.moriafly:salt-ui-android", version.ref = "saltui" }
 tinypinyin = { module = "com.github.promeg:tinypinyin", version.ref = "tinypinyin" }
 xxpermissions = { module = "com.github.getActivity:XXPermissions", version.ref = "xxpermissions" }
