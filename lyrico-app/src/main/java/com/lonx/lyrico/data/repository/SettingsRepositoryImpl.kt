@@ -1,8 +1,10 @@
 package com.lonx.lyrico.data.repository
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -12,6 +14,7 @@ import com.lonx.lyrico.viewmodel.SortInfo
 import com.lonx.lyrico.viewmodel.SortOrder
 import com.lonx.lyrics.model.Source
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
@@ -28,10 +31,13 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         val SEPARATOR = stringPreferencesKey("separator")
         val ROMA_ENABLED = booleanPreferencesKey("roma_enabled")
         val SEARCH_SOURCE_ORDER = stringPreferencesKey("search_source_order")
+
+        val SEARCH_PAGE_SIZE = intPreferencesKey("search_page_size")
     }
 
     // 默认搜索源顺序
     private val defaultSourceOrder = listOf(Source.QM, Source.KG, Source.NE)
+    private val defaultSearchPageSize = 10
 
     override val lyricDisplayMode: Flow<LyricDisplayMode>
         get() = context.settingsDataStore.data.map { preferences ->
@@ -82,6 +88,10 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                 }
             }
         }
+    override val searchPageSize: Flow<Int>
+        get() = context.settingsDataStore.data.map { preferences ->
+            preferences[PreferencesKeys.SEARCH_PAGE_SIZE] ?: defaultSearchPageSize
+        }
 
     override suspend fun getLastScanTime(): Long {
         return context.settingsDataStore.data.map { preferences ->
@@ -125,5 +135,28 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
             preferences[PreferencesKeys.SEARCH_SOURCE_ORDER] = sources.joinToString(",") { it.name }
         }
     }
+    override suspend fun saveSearchPageSize(size: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PreferencesKeys.SEARCH_PAGE_SIZE] = size
+        }
+    }
+
+
+    override val settingsFlow: Flow<SettingsSnapshot> = combine(
+        lyricDisplayMode,
+        romaEnabled,
+        separator,
+        searchSourceOrder,
+        searchPageSize
+    ) { lyricDisplayMode, romaEnabled, separator, searchSourceOrder, searchPageSize ->
+        SettingsSnapshot(
+            lyricDisplayMode,
+            romaEnabled,
+            separator,
+            searchSourceOrder,
+            searchPageSize
+        )
+    }
+
 }
 

@@ -12,8 +12,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.TopAppBarColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -24,12 +29,17 @@ import com.moriafly.salt.ui.Icon
 import com.moriafly.salt.ui.Item
 import com.moriafly.salt.ui.ItemCheck
 import com.moriafly.salt.ui.ItemDropdown
+import com.moriafly.salt.ui.ItemInfo
+import com.moriafly.salt.ui.ItemInfoType
 import com.moriafly.salt.ui.ItemOuterTitle
+import com.moriafly.salt.ui.ItemSlider
 import com.moriafly.salt.ui.ItemSwitcher
+import com.moriafly.salt.ui.ItemTip
 import com.moriafly.salt.ui.RoundedColumn
 import com.moriafly.salt.ui.SaltTheme
 import com.moriafly.salt.ui.Text
 import com.moriafly.salt.ui.UnstableSaltUiApi
+import com.moriafly.salt.ui.dialog.InputDialog
 import com.moriafly.salt.ui.icons.ArrowBack
 import com.moriafly.salt.ui.icons.SaltIcons
 import com.moriafly.salt.ui.rememberScrollState
@@ -40,6 +50,7 @@ import com.ramcosta.composedestinations.generated.destinations.FolderManagerDest
 import com.ramcosta.composedestinations.generated.destinations.SearchSourcePriorityDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import org.koin.androidx.compose.koinViewModel
+import kotlin.math.roundToInt
 
 @OptIn(
     ExperimentalMaterial3Api::class, UnstableSaltUiApi::class
@@ -60,6 +71,7 @@ fun SettingsScreen(
     val totalFolders = folders.size
     val ignoredFolders = folders.count { it.isIgnored }
     val searchSourceOrder = uiState.searchSourceOrder
+    val searchPageSize = uiState.searchPageSize
 
     Scaffold(
         modifier = Modifier
@@ -98,7 +110,6 @@ fun SettingsScreen(
                 .padding(paddingValues)
                 .verticalScroll(scrollState)
         ) {
-
             ItemOuterTitle("扫描设置")
             RoundedColumn {
                 Item(
@@ -110,12 +121,31 @@ fun SettingsScreen(
                 )
             }
 
-            ItemOuterTitle("搜索源")
+            ItemOuterTitle("搜索设置")
             RoundedColumn {
                 Item(
                     onClick = { navigator.navigate(SearchSourcePriorityDestination()) },
                     text = "搜索源优先级",
                     sub = searchSourceOrder.joinToString(" > ") { it.sourceName }
+                )
+                val tempPageSize = remember(searchPageSize) {
+                    mutableIntStateOf(searchPageSize)
+                }
+                ItemSlider(
+                    value = tempPageSize.intValue.toFloat(),
+                    valueRange = 1f..20f,
+                    steps = 18,
+                    onValueChange = {
+                        tempPageSize.intValue = it.roundToInt()
+                    },
+                    onValueChangeFinished = {
+                        viewModel.setSearchPageSize(tempPageSize.intValue)
+                    },
+                    sub = "${tempPageSize.intValue}",
+                    text = "搜索限制数"
+                )
+                ItemTip(
+                    text = "限制每个源的搜索结果数量，设置更大的值会消耗更多流量，同时产生更多图片缓存"
                 )
             }
 

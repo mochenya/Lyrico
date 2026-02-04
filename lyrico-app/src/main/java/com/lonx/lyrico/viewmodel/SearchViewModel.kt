@@ -45,7 +45,26 @@ class SearchViewModel(
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+    init {
+        viewModelScope.launch {
+            settingsRepository.settingsFlow.collect { settings ->
+                _uiState.update { state ->
+                    val newSources = settings.searchSourceOrder
 
+                    val updatedSelectedSource = if (state.selectedSearchSource !in newSources || state.searchResults.isEmpty()) {
+                        newSources.firstOrNull() ?: state.selectedSearchSource
+                    } else {
+                        state.selectedSearchSource
+                    }
+
+                    state.copy(
+                        availableSources = newSources,
+                        selectedSearchSource = updatedSelectedSource
+                    )
+                }
+            }
+        }
+    }
     /**
      * 搜索结果缓存：
      * Keyword -> (Source -> Results)
@@ -165,8 +184,16 @@ class SearchViewModel(
         source: Source
     ): List<SongSearchResult> {
         val sourceImpl = findSource(source) ?: return emptyList()
+
         val separator = settingsRepository.separator.first()
-        return sourceImpl.search(keyword = keyword, page = 1, separator = separator, pageSize = 20)
+        val pageSize = settingsRepository.searchPageSize.first()
+
+        return sourceImpl.search(
+            keyword = keyword,
+            page = 1,
+            separator = separator,
+            pageSize = pageSize
+        )
     }
 
     /**

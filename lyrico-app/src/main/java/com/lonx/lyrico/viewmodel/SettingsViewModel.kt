@@ -11,12 +11,9 @@ import com.lonx.lyrico.data.model.LyricDisplayMode
 import com.lonx.lyrics.model.Source
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.lonx.lyrico.data.model.toArtistSeparator
-import com.lonx.lyrico.data.repository.SongRepository
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -26,12 +23,12 @@ data class SettingsUiState(
     val separator: ArtistSeparator = ArtistSeparator.SLASH,
     val romaEnabled: Boolean = false,
     val folders: List<FolderEntity> = emptyList(),
-    val searchSourceOrder: List<Source> = emptyList()
+    val searchSourceOrder: List<Source> = emptyList(),
+    val searchPageSize: Int = 20
 )
 
 class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
-    private val songRepository: SongRepository,
     private val database: LyricoDatabase
 ) : ViewModel() {
 
@@ -39,24 +36,23 @@ class SettingsViewModel(
     private val _uiState = MutableStateFlow(SettingsUiState())
 
     val uiState: StateFlow<SettingsUiState> = combine(
-        settingsRepository.lyricDisplayMode,
-        settingsRepository.romaEnabled,
-        settingsRepository.separator,
-        folderDao.getAllFolders(),
-        settingsRepository.searchSourceOrder
-    ) { lyricDisplayMode, romaEnabled, separator, folders, searchSourceOrder ->
+        settingsRepository.settingsFlow,
+        folderDao.getAllFolders()
+    ) { settings, folders ->
         SettingsUiState(
-            lyricDisplayMode = lyricDisplayMode,
-            romaEnabled = romaEnabled,
-            separator = separator.toArtistSeparator(),
+            lyricDisplayMode = settings.lyricDisplayMode,
+            romaEnabled = settings.romaEnabled,
+            separator = settings.separator.toArtistSeparator(),
             folders = folders,
-            searchSourceOrder = searchSourceOrder
+            searchSourceOrder = settings.searchSourceOrder,
+            searchPageSize = settings.searchPageSize
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = SettingsUiState()
     )
+
 
 
     fun toggleFolderIgnore(folder: FolderEntity) {
@@ -100,25 +96,14 @@ class SettingsViewModel(
             }
         }
     }
-
-    fun moveSourceUp(source: Source) {
-        val currentOrder = _uiState.value.searchSourceOrder.toMutableList()
-        val index = currentOrder.indexOf(source)
-        if (index > 0) {
-            currentOrder.removeAt(index)
-            currentOrder.add(index - 1, source)
-            setSearchSourceOrder(currentOrder)
+    fun setSearchPageSize(size: Int) {
+        viewModelScope.launch {
+            settingsRepository.saveSearchPageSize(size)
+            _uiState.update {
+                it.copy(searchPageSize = size)
+            }
         }
     }
 
-    fun moveSourceDown(source: Source) {
-        val currentOrder = _uiState.value.searchSourceOrder.toMutableList()
-        val index = currentOrder.indexOf(source)
-        if (index >= 0 && index < currentOrder.size - 1) {
-            currentOrder.removeAt(index)
-            currentOrder.add(index + 1, source)
-            setSearchSourceOrder(currentOrder)
-        }
-    }
 }
 
