@@ -378,42 +378,51 @@ fun CoverEditor(
         )
 
         if (isModified) {
-            // 已修改角标
-            Box(
+            // 顶部对齐容器：已修改角标和撤销按钮
+            Row(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .background(
-                        color = LyricoColors.modifiedBadgeBackground.copy(alpha = 0.8f),
-                        shape = RoundedCornerShape(4.dp)
-                    )
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                    .shadow(1.dp, RoundedCornerShape(4.dp))
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "已修改",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = LyricoColors.modifiedText
-                )
-            }
+                // 已修改角标（左侧）
+                Box(
+                    modifier = Modifier
+                        .background(
+                            color = LyricoColors.modifiedBadgeBackground.copy(alpha = 0.8f),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .shadow(1.dp, RoundedCornerShape(4.dp))
+                ) {
+                    Text(
+                        text = "已修改",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = LyricoColors.modifiedText
+                    )
+                }
 
-            // 撤销按钮
-            IconButton(
-                onClick = onRevertClick,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp) // 和角标错开一些
-                    .background(
-                        color = SaltTheme.colors.background.copy(alpha = 0.8f),
-                        shape = CircleShape
+                // 撤销按钮（右侧）
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(
+                            color = SaltTheme.colors.background.copy(alpha = 0.8f),
+                            shape = CircleShape
+                        )
+                        .clickable { onRevertClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_undo_24dp),
+                        contentDescription = "撤销",
+                        modifier = Modifier.size(18.dp),
+                        tint = SaltTheme.colors.text
                     )
-                    .size(28.dp)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_undo_24dp),
-                    contentDescription = "撤销"
-                )
+                }
             }
         }
 
