@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lonx.audiotag.model.AudioTagData
+import com.lonx.lyrico.data.model.LyricDisplayMode
 import com.lonx.lyrico.data.model.SongEntity
 import com.lonx.lyrico.data.repository.SettingsRepository
 import com.lonx.lyrico.data.repository.SongRepository
@@ -182,8 +183,10 @@ class SongListViewModel(
             val tagData = AudioTagData(
                 title = song.title?.takeIf { !it.contains("未知", true) } ?: bestMatch.result.title,
                 artist = song.artist?.takeIf { !it.contains("未知", true) } ?: bestMatch.result.artist,
-                lyrics = lyrics?.let { LyricsUtils.formatLrcResult(it, lineByLine = lyricDisplayMode == com.lonx.lyrico.data.model.LyricDisplayMode.LINE_BY_LINE) },
-                picUrl = bestMatch.result.picUrl
+                lyrics = lyrics?.let { LyricsUtils.formatLrcResult(it, lineByLine = lyricDisplayMode == LyricDisplayMode.LINE_BY_LINE) },
+                picUrl = bestMatch.result.picUrl,
+                date = bestMatch.result.date,
+                trackerNumber = bestMatch.result.trackerNumber
             )
             val oldTime = song.fileLastModified
             if (songRepository.writeAudioTagData(song.filePath, tagData)) {
