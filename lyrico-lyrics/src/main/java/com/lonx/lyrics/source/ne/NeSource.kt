@@ -19,8 +19,13 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.ByteArrayInputStream
 import java.security.MessageDigest
+import java.util.zip.GZIPInputStream
+import java.util.zip.InflaterInputStream
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -34,7 +39,8 @@ import okhttp3.RequestBody
 class NeSource(
     private val api: NeApi,
     private val json: Json,
-    private val context: Context
+    private val context: Context,
+    private val okHttpClient: OkHttpClient
 ): SearchSource {
     override val sourceType = Source.NE
 
@@ -155,20 +161,34 @@ class NeSource(
             }
 
             try {
-                val cookieStr = preCookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
-                val headers = mapOf(
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/$APP_VER",
-                    "Referer" to "https://music.163.com/",
-                    "Cookie" to cookieStr,
-                    "Accept" to "*/*",
-                    "Host" to "interface.music.163.com"
-                )
                 val requestBody = buildBody(path, params, preCookies)
 
-                val response = api.request("https://interface.music.163.com$path", headers, requestBody)
+                // 使用 OkHttpClient 直接请求以支持多个 cookie 头
+                val requestBuilder = Request.Builder()
+                    .url("https://interface.music.163.com$path")
+                    .post(requestBody)
+                    .header("accept", "*/*")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/$APP_VER")
+                    .header("mconfig-info", """{"IuRPVVmc3WWul9fT":{"version":733184,"appver":"3.1.3.203419"}}""")
+                    .header("origin", "orpheus://orpheus")
+                    .header("sec-ch-ua", "\"Chromium\";v=\"91\"")
+                    .header("sec-ch-ua-mobile", "?0")
+                    .header("sec-fetch-site", "cross-site")
+                    .header("sec-fetch-mode", "cors")
+                    .header("sec-fetch-dest", "empty")
+                    .header("accept-language", "en-US,en;q=0.9")
 
-                if (response.isSuccessful) {
-                    val setCookieHeaders = response.headers().values("Set-Cookie")
+                // 添加多个 cookie 头（每个 cookie 单独一行）
+                preCookies.forEach { (k, v) ->
+                    requestBuilder.addHeader("cookie", "$k=$v")
+                }
+
+                val response = okHttpClient.newCall(requestBuilder.build()).execute()
+                val responseBodyBytes = response.body?.bytes() ?: byteArrayOf()
+
+                if (response.isSuccessful && responseBodyBytes.isNotEmpty()) {
+                    val setCookieHeaders = response.headers.values("Set-Cookie")
                     val responseCookies = mutableMapOf<String, String>()
                     setCookieHeaders.forEach { cookieLine ->
                         val cookiePair = cookieLine.split(";")[0].split("=")
@@ -186,24 +206,25 @@ class NeSource(
                     val wnmcid = "${(1..6).map { ('a'..'z').random() }.joinToString("")}.${System.currentTimeMillis()}.01.0"
                     cookieMap["WNMCID"] = wnmcid
 
-                    val responseBodyBytes = response.body()?.bytes() ?: byteArrayOf()
-                    if (responseBodyBytes.isNotEmpty()) {
-                        val decrypted = NeCryptoUtils.aesDecrypt(responseBodyBytes)
+                    val decrypted = NeCryptoUtils.aesDecrypt(responseBodyBytes)
+
+                    if (decrypted.isNotEmpty()) {
                         val jsonRes = json.decodeFromString<JsonObject>(decrypted)
+                        val code = jsonRes["code"]?.jsonPrimitive?.content ?: "unknown"
 
-                        if (jsonRes["code"]?.jsonPrimitive?.content == "200") {
+                        if (code == "200") {
                             userId = jsonRes["userId"]?.jsonPrimitive?.longOrNull ?: 0
-
                             saveSession(userId, cookieMap)
-
                             isInitialized = true
-                            Log.d("NeSource", "匿名登录成功: userId=$userId, 缓存已更新")
+                            Log.d("NeSource", "匿名登录成功: userId=$userId")
                         } else {
-                            Log.e("NeSource", "登录失败, 服务器返回: ${jsonRes["code"]}")
+                            Log.e("NeSource", "登录失败, 服务器返回 code: $code")
                         }
+                    } else {
+                        Log.e("NeSource", "解密失败，响应体可能不是加密数据")
                     }
                 } else {
-                    Log.e("NeSource", "HTTP 请求失败: ${response.code()}")
+                    Log.e("NeSource", "HTTP 请求失败: ${response.code}")
                 }
             } catch (e: Exception) {
                 Log.e("NeSource", "初始化过程中发生异常", e)
@@ -220,11 +241,11 @@ class NeSource(
     private fun buildBody(path: String, params: JsonObject, preCookies: Map<String, String>): RequestBody {
         val headerParam = buildJsonObject {
             put("clientSign", preCookies["clientSign"] ?: "")
-            put("osver", preCookies["osver"] ?: "")
-            put("deviceId", preCookies["deviceId"] ?: "")
             put("os", preCookies["os"] ?: "")
             put("appver", preCookies["appver"] ?: "")
-            put("requestId", System.currentTimeMillis().toString())
+            put("deviceId", preCookies["deviceId"] ?: "")
+            put("requestId", 0)
+            put("osver", preCookies["osver"] ?: "")
         }
 
         val finalParamsMap = params.toMutableMap()
@@ -235,6 +256,8 @@ class NeSource(
         }
 
         val paramsStr = json.encodeToString(JsonObject(finalParamsMap))
+        Log.d("NeSource", "buildBody 最终参数: $paramsStr")
+
         val encryptPath = path.replace("/eapi/", "/api/")
 
         val encryptedBytes = NeCryptoUtils.encryptParams(encryptPath, paramsStr)
@@ -252,11 +275,11 @@ class NeSource(
 
         val headerParam = buildJsonObject {
             put("clientSign", clientSign)
-            put("osver", OS_VER)
-            put("deviceId", DEVICE_ID)
             put("os", "pc")
             put("appver", APP_VER)
-            put("requestId", System.currentTimeMillis().toString())
+            put("deviceId", DEVICE_ID)
+            put("requestId", 0)
+            put("osver", OS_VER)
         }
 
         val headerParamString = json.encodeToString(headerParam)
@@ -276,20 +299,42 @@ class NeSource(
         val formBody = "params=$encryptedHexString"
         val requestBody = formBody.toRequestBody("application/x-www-form-urlencoded".toMediaType())
 
-        val headers = mutableMapOf(
-            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/$APP_VER",
-            "Referer" to "https://music.163.com/",
-            "Cookie" to cookieMap.entries.joinToString("; ") { "${it.key}=${it.value}" }
-        )
+        // 使用 OkHttpClient 直接请求以支持多个 cookie 头
+        val requestBuilder = Request.Builder()
+            .url("https://interface.music.163.com$path")
+            .post(requestBody)
+            .header("accept", "*/*")
+            .header("content-type", "application/x-www-form-urlencoded")
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/$APP_VER")
+            .header("mconfig-info", """{"IuRPVVmc3WWul9fT":{"version":733184,"appver":"3.1.3.203419"}}""")
+            .header("origin", "orpheus://orpheus")
+            .header("sec-ch-ua", "\"Chromium\";v=\"91\"")
+            .header("sec-ch-ua-mobile", "?0")
+            .header("sec-fetch-site", "cross-site")
+            .header("sec-fetch-mode", "cors")
+            .header("sec-fetch-dest", "empty")
+            .header("accept-language", "en-US,en;q=0.9")
 
-        val fullUrl = "https://interface.music.163.com$path"
+        // 添加多个 cookie 头（每个 cookie 单独一行）
+        cookieMap.forEach { (k, v) ->
+            requestBuilder.addHeader("cookie", "$k=$v")
+        }
 
-        val responseBody = api.request(fullUrl, headers, requestBody)
-        val responseBytes = responseBody.body()?.bytes() ?: return@withContext ""
-        if (responseBytes.isEmpty()) return@withContext ""
-
-        // 解密
         try {
+            val response = okHttpClient.newCall(requestBuilder.build()).execute()
+            var responseBytes = response.body?.bytes() ?: return@withContext ""
+            if (responseBytes.isEmpty()) return@withContext ""
+
+            // 检查是否是 gzip 压缩数据 (magic number: 1F 8B)
+            if (responseBytes.size >= 2 && responseBytes[0] == 0x1F.toByte() && responseBytes[1] == 0x8B.toByte()) {
+                responseBytes = decompressGzip(responseBytes)
+            }
+            // 检查是否是 zlib/deflate 压缩数据 (magic number: 78 9C, 78 DA, 78 01 等)
+            else if (responseBytes.size >= 2 && responseBytes[0] == 0x78.toByte()) {
+                responseBytes = decompressZlib(responseBytes)
+            }
+
+            // 解密
             val decrypted = NeCryptoUtils.aesDecrypt(responseBytes)
 
             // 检测 Session 是否失效
@@ -300,7 +345,8 @@ class NeSource(
 
             return@withContext decrypted
         } catch (e: Exception) {
-            ""
+            Log.e("NeSource", "doRequest 请求异常", e)
+            return@withContext ""
         }
     }
 
@@ -321,12 +367,9 @@ class NeSource(
 
         try {
             val rawJson = doRequest(path, params)
-            Log.d("NeSource", "Search raw: $rawJson")
-
             val resp = json.decodeFromString<NeSearchResponse>(rawJson)
 
             if (resp.code != 200) return@withContext emptyList()
-            Log.d("NeSource", "Search result: $resp")
             return@withContext resp.data?.resources?.map { res ->
                 val song = res.baseInfo.simpleSongData
                 SongSearchResult(
@@ -362,10 +405,6 @@ class NeSource(
         val resp = try {
             json.decodeFromString<NeLyricResponse>(rawJson)
         } catch (e: Exception) { return@withContext null }
-        Log.d("NeSource", "Lyric lrc result: ${resp.lrc}")
-        Log.d("NeSource", "Lyric yrc result: ${resp.yrc}")
-        Log.d("NeSource", "Lyric translation result: ${resp.tlyric}")
-        Log.d("NeSource", "Lyric romanization result: ${resp.romalrc}")
         return@withContext YrcParser.parse(
             yrc = resp.yrc?.lyric,
             lrc = resp.lrc?.lyric,
@@ -404,5 +443,33 @@ class NeSource(
             .atZone(ZoneId.systemDefault())
             .toLocalDate()
             .format(formatter)
+    }
+
+    /**
+     * 解压 gzip 数据
+     */
+    private fun decompressGzip(compressed: ByteArray): ByteArray {
+        return try {
+            GZIPInputStream(ByteArrayInputStream(compressed)).use { gzipStream ->
+                gzipStream.readBytes()
+            }
+        } catch (e: Exception) {
+            Log.e("NeSource", "Gzip 解压失败", e)
+            compressed
+        }
+    }
+
+    /**
+     * 解压 zlib/deflate 数据
+     */
+    private fun decompressZlib(compressed: ByteArray): ByteArray {
+        return try {
+            InflaterInputStream(ByteArrayInputStream(compressed)).use { inflaterStream ->
+                inflaterStream.readBytes()
+            }
+        } catch (e: Exception) {
+            Log.e("NeSource", "Zlib 解压失败", e)
+            compressed
+        }
     }
 }

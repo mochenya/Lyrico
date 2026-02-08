@@ -119,7 +119,8 @@ val appModule = module {
     single<SearchSource>(named("Ne")) { NeSource(
         api = get(),
         json = get(),
-        context = androidContext()
+        context = androidContext(),
+        okHttpClient = get()
     ) }
 
     single { getAll<SearchSource>() }
